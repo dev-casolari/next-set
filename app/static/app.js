@@ -30,11 +30,11 @@ const player = new SetPlayer($("youtube-player"), ({ status, message, version })
   ui["player-frame"].setAttribute("aria-busy", String(status === "loading"));
   ui["player-error"].hidden = status !== "error";
   ui["player-error"].textContent = status === "error" ? message : "";
-  if (status === "loading") frame("Caricamento del player", "Il video partirà solo quando premi Play.", true);
-  else if (status === "error" && !$("youtube-player").querySelector("iframe")) frame("Player non disponibile", "Puoi scegliere un altro set o modificare i filtri.");
+  if (status === "loading") frame("Loading player", "The video will only start when you press Play.", true);
+  else if (status === "error" && !$("youtube-player").querySelector("iframe")) frame("Player unavailable", "You can choose another set or change the filters.");
   else ui["frame-message"].hidden = true;
   if (status === "error") announce(message);
-  else if (status === "ready") announce(`${state.item.title}. ${state.candidates} set disponibili. Premi Play per ascoltare.`);
+  else if (status === "ready") announce(`${state.item.title}. ${state.candidates} sets available. Press Play to listen.`);
   controls();
 });
 
@@ -62,19 +62,19 @@ async function select() {
   state.item = result.item;
   state.currentVideoId = result.item?.youtube_id ?? null;
   state.playerStatus = result.item ? "loading" : "idle";
-  ui["candidate-count"].textContent = `${result.count} ${result.count === 1 ? "set disponibile" : "set disponibili"}`;
-  ui["selection-note"].textContent = result.count === 1 ? "Un solo DJ set disponibile con questi filtri" : "";
+  ui["candidate-count"].textContent = `${result.count} ${result.count === 1 ? "set available" : "sets available"}`;
+  ui["selection-note"].textContent = result.count === 1 ? "Only one DJ set available with these filters" : "";
   ui["player-error"].hidden = true;
   renderItem(result.item);
   controls();
   if (!result.item) {
     player.clear(version);
-    ui["set-title"].textContent = "Prova un’altra combinazione.";
-    frame("Nessun DJ set corrisponde ai filtri selezionati", "Modifica i filtri oppure azzerali per ripartire.");
-    announce("Nessun DJ set corrisponde ai filtri selezionati");
+    ui["set-title"].textContent = "Try another combination.";
+    frame("No DJ set matches the selected filters", "Modify the filters or reset them to start over.");
+    announce("No DJ set matches the selected filters");
     return;
   }
-  announce(`Caricamento di ${result.item.title}. ${result.count === 1 ? "Un solo DJ set disponibile con questi filtri." : ""}`);
+  announce(`Loading ${result.item.title}. ${result.count === 1 ? "Only one DJ set available with these filters." : ""}`);
   await player.replace(result.item.youtube_id, version);
 }
 
@@ -88,8 +88,8 @@ function reset() {
 }
 function fillOptions() {
   const options = catalogOptions(state.catalog);
-  ui.genre.replaceChildren(new Option("Tutti i generi", ""), ...options.genres.map(g => new Option(g[0].toUpperCase() + g.slice(1), g)));
-  ui.year.replaceChildren(new Option("Tutti gli anni", ""), ...options.years.map(y => new Option(String(y), String(y))));
+  ui.genre.replaceChildren(new Option("All genres", ""), ...options.genres.map(g => new Option(g[0].toUpperCase() + g.slice(1), g)));
+  ui.year.replaceChildren(new Option("All years", ""), ...options.years.map(y => new Option(String(y), String(y))));
 }
 
 function validCatalog(data) {
@@ -108,12 +108,12 @@ async function initialize() {
   Object.assign(state, { catalog: [], filters: { ...DEFAULT_FILTERS }, currentVideoId: null, catalogStatus: "loading", playerStatus: "idle", candidates: 0, item: null });
   ui.genre.value = ""; ui.duration.value = "all"; ui.year.value = "";
   ui["catalog-total"].textContent = "—";
-  ui["candidate-count"].textContent = "Caricamento…";
+  ui["candidate-count"].textContent = "Loading…";
   ui["selection-note"].textContent = "";
   ui["player-error"].hidden = true;
   renderItem(null); controls();
-  frame("Caricamento del catalogo", "Un momento, scegliamo il tuo prossimo set.", true);
-  announce("Caricamento del catalogo");
+  frame("Loading catalog", "One moment, choosing your next set.", true);
+  announce("Loading catalog");
   const timeout = setTimeout(() => controller.abort(), 12000);
   try {
     const response = await fetch(preview ? "/preview-catalog.json" : "/api/catalog", { cache: "no-store", signal: controller.signal });
@@ -128,10 +128,10 @@ async function initialize() {
     ui["catalog-total"].textContent = String(data.items.length);
     if (!data.items.length) {
       state.catalogStatus = "empty";
-      ui["candidate-count"].textContent = "0 set disponibili";
-      ui["set-title"].textContent = "Il catalogo è ancora vuoto.";
-      frame("Catalogo vuoto", "Non ci sono DJ set disponibili. Ricarica la pagina per riprovare.", false, true);
-      announce("Catalogo vuoto. Ricarica la pagina per riprovare.");
+      ui["candidate-count"].textContent = "0 sets available";
+      ui["set-title"].textContent = "The catalog is currently empty.";
+      frame("Catalog empty", "There are no DJ sets available. Reload the page to try again.", false, true);
+      announce("Catalog empty. Reload the page to try again.");
       controls(); return;
     }
     fillOptions();
@@ -140,16 +140,16 @@ async function initialize() {
   } catch (error) {
     if (version !== catalogVersion) return;
     state.catalogStatus = "error";
-    ui["candidate-count"].textContent = "Catalogo non disponibile";
-    ui["set-title"].textContent = "Riproviamo tra poco.";
+    ui["candidate-count"].textContent = "Catalog unavailable";
+    ui["set-title"].textContent = "Let's try again in a moment.";
     const reasons = {
-      CATALOG_TIMEOUT: "Il catalogo sta impiegando troppo tempo.",
-      CATALOG_RATE_LIMITED: "Il catalogo è temporaneamente occupato.",
-      CATALOG_SCHEMA_INVALID: "Il catalogo non ha il formato previsto.",
+      CATALOG_TIMEOUT: "The catalog is taking too long to load.",
+      CATALOG_RATE_LIMITED: "The catalog is temporarily busy.",
+      CATALOG_SCHEMA_INVALID: "The catalog format is invalid.",
     };
-    const message = controller.signal.aborted ? reasons.CATALOG_TIMEOUT : reasons[error.message] || "Impossibile caricare il catalogo.";
-    frame(message, "Ricarica la pagina per riprovare.", false, true);
-    announce(`${message} Ricarica la pagina per riprovare.`);
+    const message = controller.signal.aborted ? reasons.CATALOG_TIMEOUT : reasons[error.message] || "Unable to load the catalog.";
+    frame(message, "Reload the page to try again.", false, true);
+    announce(`${message} Reload the page to try again.`);
     controls();
   } finally { clearTimeout(timeout); }
 }
@@ -169,13 +169,13 @@ if (document.modelContext?.registerTool) {
   const register = tool => {
     try { Promise.resolve(document.modelContext.registerTool(tool, { signal: lifecycle.signal })).catch(() => {}); } catch { /* Unsupported experimental API. */ }
   };
-  register({ name: "nextset_get_selection", description: "Leggi il DJ set selezionato e i filtri attivi.", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, untrustedContentHint: true }, execute: snapshot });
-  register({ name: "nextset_select_set", description: "Seleziona un altro DJ set con i filtri indicati; interrompe il video corrente senza avviare audio.", inputSchema: { type: "object", properties: { genre: { type: ["string", "null"] }, duration: { enum: DURATIONS }, year: { type: ["integer", "null"] } }, additionalProperties: false }, annotations: { readOnlyHint: false, untrustedContentHint: true }, execute: async input => {
-    if (state.catalogStatus !== "ready") throw new Error("Catalogo non disponibile");
-    if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => !["genre", "duration", "year"].includes(key))) throw new Error("Filtri non validi");
+  register({ name: "nextset_get_selection", description: "Read the selected DJ set and active filters.", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, untrustedContentHint: true }, execute: snapshot });
+  register({ name: "nextset_select_set", description: "Select another DJ set with the specified filters; stops the current video without starting audio.", inputSchema: { type: "object", properties: { genre: { type: ["string", "null"] }, duration: { enum: DURATIONS }, year: { type: ["integer", "null"] } }, additionalProperties: false }, annotations: { readOnlyHint: false, untrustedContentHint: true }, execute: async input => {
+    if (state.catalogStatus !== "ready") throw new Error("Catalog unavailable");
+    if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => !["genre", "duration", "year"].includes(key))) throw new Error("Invalid filters");
     const filters = { ...state.filters, ...input };
     const options = catalogOptions(state.catalog);
-    if ((filters.genre !== null && !options.genres.includes(filters.genre)) || !DURATIONS.includes(filters.duration) || (filters.year !== null && !options.years.includes(filters.year))) throw new Error("Filtri non validi");
+    if ((filters.genre !== null && !options.genres.includes(filters.genre)) || !DURATIONS.includes(filters.duration) || (filters.year !== null && !options.years.includes(filters.year))) throw new Error("Invalid filters");
     ui.genre.value = filters.genre ?? ""; ui.duration.value = filters.duration; ui.year.value = filters.year ?? "";
     await updateFilters(); return snapshot();
   }});

@@ -2,7 +2,7 @@ import { DEFAULT_FILTERS, DURATIONS, catalogOptions, formatDuration, selectSet }
 import { SetPlayer } from "./player.js";
 
 const $ = id => document.getElementById(id);
-const ui = Object.fromEntries(["genre", "duration", "year", "reset", "next", "reload", "frame-message", "frame-message-title", "frame-message-detail", "loader", "player-frame", "player-error", "set-title", "metadata", "genres", "set-duration", "set-year", "candidate-count", "catalog-total", "selection-note", "announcement", "play-hint", "set-eyebrow"].map(id => [id, $(id)]));
+const ui = Object.fromEntries(["genre", "duration", "year", "reset", "next", "reload", "frame-message", "frame-message-title", "frame-message-detail", "loader", "player-frame", "player-error", "set-title", "metadata", "genres", "set-duration", "set-year", "catalog-total", "selection-note", "announcement", "play-hint", "set-eyebrow"].map(id => [id, $(id)]));
 const state = { catalog: [], filters: { ...DEFAULT_FILTERS }, currentVideoId: null, catalogStatus: "loading", playerStatus: "idle", selectionVersion: 0, candidates: 0, item: null };
 let catalogController;
 let catalogVersion = 0;
@@ -62,7 +62,6 @@ async function select() {
   state.item = result.item;
   state.currentVideoId = result.item?.youtube_id ?? null;
   state.playerStatus = result.item ? "loading" : "idle";
-  ui["candidate-count"].textContent = `${result.count} ${result.count === 1 ? "set available" : "sets available"}`;
   ui["selection-note"].textContent = result.count === 1 ? "Only one DJ set available with these filters" : "";
   ui["player-error"].hidden = true;
   renderItem(result.item);
@@ -108,7 +107,6 @@ async function initialize() {
   Object.assign(state, { catalog: [], filters: { ...DEFAULT_FILTERS }, currentVideoId: null, catalogStatus: "loading", playerStatus: "idle", candidates: 0, item: null });
   ui.genre.value = ""; ui.duration.value = "all"; ui.year.value = "";
   ui["catalog-total"].textContent = "—";
-  ui["candidate-count"].textContent = "Loading…";
   ui["selection-note"].textContent = "";
   ui["player-error"].hidden = true;
   renderItem(null); controls();
@@ -128,7 +126,6 @@ async function initialize() {
     ui["catalog-total"].textContent = String(data.items.length);
     if (!data.items.length) {
       state.catalogStatus = "empty";
-      ui["candidate-count"].textContent = "0 sets available";
       ui["set-title"].textContent = "The catalog is currently empty.";
       frame("Catalog empty", "There are no DJ sets available. Reload the page to try again.", false, true);
       announce("Catalog empty. Reload the page to try again.");
@@ -140,7 +137,6 @@ async function initialize() {
   } catch (error) {
     if (version !== catalogVersion) return;
     state.catalogStatus = "error";
-    ui["candidate-count"].textContent = "Catalog unavailable";
     ui["set-title"].textContent = "Let's try again in a moment.";
     const reasons = {
       CATALOG_TIMEOUT: "The catalog is taking too long to load.",

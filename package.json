@@ -1,0 +1,1 @@
+{"name":"nextset-frontend-tests","private":true,"type":"module","scripts":{"test":"node --test tests/selection.test.js tests/player.test.js"}}

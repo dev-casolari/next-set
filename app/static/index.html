@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Scopri il tuo prossimo DJ set. Scegli genere, durata e anno, oppure lasciati sorprendere da NextSet.">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="theme-color" content="#0b0d0c">
+  <title>NextSet — Il tuo prossimo DJ set</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Vai al player</a>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand" aria-label="NextSet"><svg aria-hidden="true" viewBox="0 0 32 32"><path d="M6 25V7h5l10 13V7h5v18h-5L11 12v13z" fill="currentColor"/></svg><span>Next<span class="brand-accent">Set</span></span></div>
+      <span class="header-caption">DJ SET RANDOMIZER</span>
+    </header>
+    <p id="demo-notice" class="demo-notice" hidden>Anteprima · Catalogo dimostrativo, non collegato al tuo Google Sheet.</p>
+    <div class="workspace">
+      <aside class="filters" aria-labelledby="filters-heading">
+        <div class="filter-heading"><h1 id="filters-heading">Il tuo suono.</h1><span class="section-index" aria-hidden="true">01 /</span></div>
+        <p class="filter-intro">Scegli l’atmosfera.<br>Al resto pensa il caso.</p>
+        <form id="filters-form">
+          <div class="field"><label for="genre">Genere</label><select id="genre" name="genre" disabled><option value="">Tutti i generi</option></select></div>
+          <div class="field"><label for="duration">Durata</label><select id="duration" name="duration" disabled><option value="all">Qualsiasi durata</option><option value="lt60">Meno di 60 minuti</option><option value="60to120">Da 60 a meno di 120 min</option><option value="gte120">120 minuti o più</option></select></div>
+          <div class="field"><label for="year">Anno del set</label><select id="year" name="year" disabled><option value="">Tutti gli anni</option></select></div>
+          <button id="reset" type="button" class="reset-button" disabled>Azzera filtri</button>
+        </form>
+        <div class="catalog-summary"><span class="eyebrow">NEL CATALOGO</span><p><strong id="catalog-total">—</strong> <span id="catalog-total-label">DJ set</span></p></div>
+      </aside>
+      <main id="main" class="main" tabindex="-1">
+        <div class="main-heading"><h2>La prossima scoperta.</h2><span class="selection-label" id="candidate-count">Caricamento…</span></div>
+        <section class="player-section" aria-label="Player YouTube">
+          <div class="player-frame" id="player-frame" aria-busy="true">
+            <div id="youtube-player"></div>
+            <div class="frame-message" id="frame-message">
+              <span class="loader" id="loader" aria-hidden="true"></span>
+              <p id="frame-message-title">Caricamento del catalogo</p>
+              <p id="frame-message-detail">Un momento, scegliamo il tuo prossimo set.</p>
+              <button id="reload" type="button" class="secondary-button" hidden>Ricarica la pagina</button>
+            </div>
+          </div>
+          <p class="player-error" id="player-error" role="status" hidden></p>
+        </section>
+        <section class="set-panel" aria-labelledby="set-title">
+          <div class="set-info">
+            <p class="eyebrow" id="set-eyebrow">IL SET SELEZIONATO</p>
+            <h2 id="set-title">Il prossimo potrebbe sorprenderti.</h2>
+            <div class="metadata" id="metadata" hidden><div id="genres" class="genre-list" aria-label="Generi"></div><span class="meta-divider" aria-hidden="true"></span><span id="set-duration"></span><span id="set-year"></span></div>
+          </div>
+          <div class="next-action"><button id="next" type="button" class="next-button" disabled>Altro DJ set<span class="button-mark" aria-hidden="true">+1</span></button><p id="play-hint">Premi Play nel video per ascoltare.</p></div>
+        </section>
+        <p class="selection-note" id="selection-note"></p>
+        <p class="sr-only" id="announcement" aria-live="polite" aria-atomic="true"></p>
+      </main>
+    </div>
+    <footer><span>Una selezione curata. Una scelta casuale.</span><span>Powered by YouTube</span></footer>
+  </div>
+  <noscript><p class="noscript">Abilita JavaScript per usare i filtri e il player di NextSet.</p></noscript>
+</body>
+</html>

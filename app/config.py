@@ -6,6 +6,25 @@ from dataclasses import dataclass, field
 
 FIELDS = ("youtube_url", "title", "genres", "duration_minutes", "year")
 
+COUNTRY_FLAGS = {
+    "Argentina": "🇦🇷",
+    "Australia": "🇦🇺",
+    "Belgium": "🇧🇪",
+    "Brasil": "🇧🇷",
+    "Canada": "🇨🇦",
+    "Colombia": "🇨🇴",
+    "Croatia": "🇭🇷",
+    "France": "🇫🇷",
+    "Italy": "🇮🇹",
+    "Japan": "🇯🇵",
+    "Mexico": "🇲🇽",
+    "Netherlands": "🇳🇱",
+    "Romania": "🇷🇴",
+    "Spain": "🇪🇸",
+    "United Kingdom": "🇬🇧",
+    "United States": "🇺🇸",
+}
+
 
 def normalize_header(value: str) -> str:
     return value.strip().casefold()

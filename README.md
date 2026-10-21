@@ -66,7 +66,7 @@ Changing the switch fetches the selected worksheet from the same `GOOGLE_SHEETS_
 | Logical field | Spreadsheet data |
 | --- | --- |
 | `youtube_url` | `LinkYoutube`: a `watch?v=`, `youtu.be/`, `/embed/`, or `/live/` URL with an 11-character video ID |
-| `title` | Nonempty `Artist` text, used as the set title |
+| `title` | Nonempty `Artist` text, followed by `@ EventName` and the matching country flag when those columns are present |
 | `genres` | `CustomGenres`: comma-separated genres, such as `House, Tech House`; semicolons are also supported |
 | `duration_minutes` | `Duration`: a positive number of minutes; use this field rather than `DurationApprox` |
 | `year` | `Year`: the performance year as a four-digit integer |
@@ -87,7 +87,7 @@ To try the same schema in a new spreadsheet:
 2. Create `AllSets` with the same header row. You can copy the example rows there initially and then add the rest of your catalog.
 3. Configure the spreadsheet ID, API key, and column mapping as described above.
 
-NextSet reads the five mapped columns; fields such as `ID`, `Link1001`, `Country`, `EventName`, and `Score` remain in the example but do not affect selection. The CSV is sample input for Google Sheets, not an automatic production fallback or a local CSV data source.
+NextSet reads the five mapped columns and also uses `EventName` and `Country` to add `@ EventName [flag]` after each artist in the set title. The flag is added for countries in the configured flag dictionary; unknown country names leave the flag off. Other fields such as `ID`, `Link1001`, and `Score` do not affect selection. The CSV is sample input for Google Sheets, not an automatic production fallback or a local CSV data source.
 
 ## Behavior
 

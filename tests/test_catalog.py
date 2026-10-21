@@ -61,11 +61,23 @@ def test_owner_sheet_mapping_and_comma_separated_genres():
     ]
     result = normalize_catalog({"values":rows}, mapping)
     assert len(result) == 1
-    assert result[0].title == "Axwell"
+    assert result[0].title == "Axwell @ Tomorrowland 🇧🇪"
     assert result[0].year == 2025
     assert result[0].duration_minutes == 59
     assert result[0].genres == ["EDM", "Mainstage", "Progressive House", "Electro House"]
     assert "Country" not in result[0].model_dump()
+
+
+@pytest.mark.parametrize(("country", "expected_flag"), [
+    ("united states", "🇺🇸"),
+    ("Brasil", "🇧🇷"),
+    ("Unknown", ""),
+])
+def test_title_includes_event_and_country_flag(country, expected_flag):
+    headers = HEADERS + ["EventName", "Country"]
+    row = VALID + ["Festival", country]
+    item = normalize_catalog({"values": [headers, row]}, MAPPING)[0]
+    assert item.title == f"A set @ Festival" + (f" {expected_flag}" if expected_flag else "")
 
 
 @pytest.mark.parametrize("field,value", [(1," "),(2,";;"),(2,[]),(3,0),(3,-1),(3,"nan"),(3,"inf"),(3,True),(3,"01:30"),(4,True),(4,2024.5),(4,999),(4,"20x4")])

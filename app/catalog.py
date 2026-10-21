@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, quote, urlsplit
 
 import httpx
 
-from app.config import FIELDS, Settings, normalize_header
+from app.config import COUNTRY_FLAGS, FIELDS, Settings, normalize_header
 from app.models import CatalogResponse, DJSet
 
 logger = logging.getLogger("nextset.catalog")
@@ -115,9 +115,20 @@ def normalize_catalog(payload, column_map: dict[str, str]) -> list[DJSet]:
             logger.warning("catalog_schema_invalid field=%s reason=missing_or_duplicate_header", field)
             raise CatalogError("CATALOG_SCHEMA_INVALID")
         indexes[field] = headers.index(header)
+    event_name_indexes = [i for i, header in enumerate(headers) if header == normalize_header("EventName")]
+    country_indexes = [i for i, header in enumerate(headers) if header == normalize_header("Country")]
+    event_name_index = event_name_indexes[0] if len(event_name_indexes) == 1 else None
+    country_index = country_indexes[0] if len(country_indexes) == 1 else None
     items, seen = [], set()
     for row_number, row in enumerate(rows[1:], start=2):
         cells = {field: row[index] if index < len(row) else None for field, index in indexes.items()}
+        artist = cells["title"]
+        event_name = row[event_name_index] if event_name_index is not None and event_name_index < len(row) else None
+        country = row[country_index] if country_index is not None and country_index < len(row) else None
+        if isinstance(artist, str) and isinstance(event_name, str) and event_name.strip():
+            country_name = country.strip().title() if isinstance(country, str) else ""
+            flag = COUNTRY_FLAGS.get(country_name, "")
+            cells["title"] = f"{artist.strip()} @ {event_name.strip()}" + (f" {flag}" if flag else "")
         try:
             item = parse_row(cells)
         except (ValueError, TypeError, OverflowError) as error:

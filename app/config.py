@@ -6,6 +6,25 @@ from dataclasses import dataclass, field
 
 FIELDS = ("youtube_url", "title", "genres", "duration_minutes", "year")
 
+COUNTRY_FLAGS = {
+    "Argentina": "🇦🇷",
+    "Australia": "🇦🇺",
+    "Belgium": "🇧🇪",
+    "Brasil": "🇧🇷",
+    "Canada": "🇨🇦",
+    "Colombia": "🇨🇴",
+    "Croatia": "🇭🇷",
+    "France": "🇫🇷",
+    "Italy": "🇮🇹",
+    "Japan": "🇯🇵",
+    "Mexico": "🇲🇽",
+    "Netherlands": "🇳🇱",
+    "Romania": "🇷🇴",
+    "Spain": "🇪🇸",
+    "United Kingdom": "🇬🇧",
+    "United States": "🇺🇸",
+}
+
 
 def normalize_header(value: str) -> str:
     return value.strip().casefold()
@@ -41,6 +60,12 @@ class Settings:
             raise ValueError("SHEET_COLUMN_MAP contiene intestazioni duplicate")
         if self.log_level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
             raise ValueError("LOG_LEVEL non valido")
+
+    def catalog_range(self, curated: bool = False) -> str:
+        """Reuse configured cells while selecting the requested catalog worksheet."""
+        cells = self.sheet_range.rsplit("!", 1)[-1].strip()
+        worksheet = "Sets" if curated else "AllSets"
+        return f"{worksheet}!{cells}"
 
     @classmethod
     def from_env(cls):

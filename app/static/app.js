@@ -1,13 +1,16 @@
-import { DEFAULT_FILTERS, DURATIONS, catalogOptions, formatDuration, selectSet } from "./selection.js";
+import { DEFAULT_FILTERS, catalogOptions, formatDuration, normalizeApproxDuration, selectSet } from "./selection.js";
 import { SetPlayer } from "./player.js";
 
 const $ = id => document.getElementById(id);
-const ui = Object.fromEntries(["genre", "duration", "year", "reset", "next", "reload", "frame-message", "frame-message-title", "frame-message-detail", "loader", "player-frame", "player-error", "set-title", "metadata", "genres", "set-duration", "set-year", "catalog-total", "selection-note", "announcement", "play-hint", "set-eyebrow"].map(id => [id, $(id)]));
-const state = { catalog: [], filters: { ...DEFAULT_FILTERS }, currentVideoId: null, catalogStatus: "loading", playerStatus: "idle", selectionVersion: 0, candidates: 0, item: null };
+const ui = Object.fromEntries(["genre", "duration", "year", "reset", "only-curated", "next", "reload", "frame-message", "frame-message-title", "frame-message-detail", "loader", "player-frame", "player-error", "set-title", "metadata", "genres", "set-duration", "set-year", "catalog-total", "selection-note", "announcement", "play-hint", "set-eyebrow"].map(id => [id, $(id)]));
+const state = { catalog: [], curated: false, filters: { ...DEFAULT_FILTERS }, currentVideoId: null, catalogStatus: "loading", playerStatus: "idle", selectionVersion: 0, candidates: 0, item: null };
 let catalogController;
 let catalogVersion = 0;
 const preview = document.body.dataset.preview === "true";
 $("demo-notice").hidden = !preview;
+// Static previews contain one snapshot; only the connected app can switch sheets.
+ui["only-curated"].disabled = preview;
+if (preview) ui["only-curated"].title = "Catalog switching is available in the connected app.";
 
 function announce(message) { ui.announcement.textContent = message; }
 function controls() {
@@ -44,12 +47,20 @@ function renderItem(item) {
   ui["set-eyebrow"].hidden = !item;
   if (!item) return;
   ui["set-title"].textContent = item.title;
-  ui.genres.replaceChildren(...item.genres.map(genre => {
+  const tags = item.genres.map(genre => {
     const tag = document.createElement("span");
     tag.className = "genre-tag";
     tag.textContent = genre;
     return tag;
-  }));
+  });
+  if (item.event_type) {
+    const eventType = document.createElement("span");
+    eventType.className = "genre-tag event-type-tag";
+    eventType.textContent = item.event_type;
+    ui.genres.replaceChildren(eventType, ...tags);
+  } else {
+    ui.genres.replaceChildren(...tags);
+  }
   ui["set-duration"].textContent = formatDuration(item.duration_minutes);
   ui["set-year"].textContent = String(item.year);
 }
@@ -87,26 +98,34 @@ function reset() {
 }
 function fillOptions() {
   const options = catalogOptions(state.catalog);
-  ui.genre.replaceChildren(new Option("All genres", ""), ...options.genres.map(g => new Option(g[0].toUpperCase() + g.slice(1), g)));
+  ui.genre.replaceChildren(new Option("All genres", ""), ...options.genres.map(g => new Option(g, g)));
+  ui.duration.replaceChildren(new Option("Any duration", "all"),
+    ...options.durations.map(duration => new Option(duration, normalizeApproxDuration(duration))));
   ui.year.replaceChildren(new Option("All years", ""), ...options.years.map(y => new Option(String(y), String(y))));
 }
 
 function validCatalog(data) {
   return data && typeof data.fetched_at === "string" && Array.isArray(data.items) && data.items.every(item =>
     /^[A-Za-z0-9_-]{11}$/.test(item.youtube_id) && typeof item.title === "string" && item.title.trim() &&
+    (item.event_type === null || item.event_type === undefined || typeof item.event_type === "string") &&
+    (item.duration_approx === null || item.duration_approx === undefined || typeof item.duration_approx === "string") &&
     Array.isArray(item.genres) && item.genres.length && item.genres.every(g => typeof g === "string" && g.trim()) &&
     Number.isFinite(item.duration_minutes) && item.duration_minutes > 0 && Number.isInteger(item.year) && item.year >= 1000 && item.year <= 9999);
 }
 
-async function initialize() {
+async function initialize(curated = state.curated) {
   const version = ++catalogVersion;
   catalogController?.abort();
   catalogController = new AbortController();
   const controller = catalogController;
   player.clear(++state.selectionVersion);
-  Object.assign(state, { catalog: [], filters: { ...DEFAULT_FILTERS }, currentVideoId: null, catalogStatus: "loading", playerStatus: "idle", candidates: 0, item: null });
-  ui.genre.value = ""; ui.duration.value = "all"; ui.year.value = "";
+  Object.assign(state, { catalog: [], curated, filters: { ...DEFAULT_FILTERS }, currentVideoId: null, catalogStatus: "loading", playerStatus: "idle", candidates: 0, item: null });
+  ui["only-curated"].checked = curated;
+  ui.genre.replaceChildren(new Option("All genres", ""));
+  ui.year.replaceChildren(new Option("All years", ""));
+  ui.duration.value = "all";
   ui["catalog-total"].textContent = "—";
+  ui["set-title"].textContent = "Choosing your next set.";
   ui["selection-note"].textContent = "";
   ui["player-error"].hidden = true;
   renderItem(null); controls();
@@ -114,7 +133,8 @@ async function initialize() {
   announce("Loading catalog");
   const timeout = setTimeout(() => controller.abort(), 12000);
   try {
-    const response = await fetch(preview ? "/preview-catalog.json" : "/api/catalog", { cache: "no-store", signal: controller.signal });
+    const catalogUrl = preview ? "/preview-catalog.json" : curated ? "/api/catalog?curated=true" : "/api/catalog";
+    const response = await fetch(catalogUrl, { cache: "no-store", signal: controller.signal });
     if (!response.ok) {
       const problem = await response.json().catch(() => ({}));
       throw new Error(problem.error?.code || "unavailable");
@@ -127,8 +147,8 @@ async function initialize() {
     if (!data.items.length) {
       state.catalogStatus = "empty";
       ui["set-title"].textContent = "The catalog is currently empty.";
-      frame("Catalog empty", "There are no DJ sets available. Reload the page to try again.", false, true);
-      announce("Catalog empty. Reload the page to try again.");
+      frame("Catalog empty", "There are no DJ sets available. Reload the catalog or change your catalog selection.", false, true);
+      announce("Catalog empty. Reload the catalog or change your catalog selection.");
       controls(); return;
     }
     fillOptions();
@@ -144,34 +164,37 @@ async function initialize() {
       CATALOG_SCHEMA_INVALID: "The catalog format is invalid.",
     };
     const message = controller.signal.aborted ? reasons.CATALOG_TIMEOUT : reasons[error.message] || "Unable to load the catalog.";
-    frame(message, "Reload the page to try again.", false, true);
-    announce(`${message} Reload the page to try again.`);
+    frame(message, "Reload the catalog or change your catalog selection.", false, true);
+    announce(`${message} Reload the catalog or change your catalog selection.`);
     controls();
   } finally { clearTimeout(timeout); }
 }
 
 for (const key of ["genre", "duration", "year"]) ui[key].addEventListener("change", updateFilters);
 ui.reset.addEventListener("click", reset);
+ui["only-curated"].addEventListener("change", () => void initialize(ui["only-curated"].checked));
 ui.next.addEventListener("click", select);
-ui.reload.addEventListener("click", () => window.location.reload());
+ui.reload.addEventListener("click", () => void initialize());
 $("filters-form").addEventListener("submit", event => event.preventDefault());
-window.addEventListener("pageshow", event => { if (event.persisted) void initialize(); });
+window.addEventListener("pageshow", event => { if (event.persisted) void initialize(false); });
 window.addEventListener("pagehide", () => { ++catalogVersion; catalogController?.abort(); player.clear(++state.selectionVersion); });
 
 // Progressive enhancement: all tools act on the same state as the visible controls.
 if (document.modelContext?.registerTool) {
   const lifecycle = new AbortController();
-  const snapshot = () => ({ filters: state.filters, current: state.item, candidates: state.candidates, playerStatus: state.playerStatus });
+  const snapshot = () => ({ curated: state.curated, filters: state.filters, current: state.item, candidates: state.candidates, playerStatus: state.playerStatus });
   const register = tool => {
     try { Promise.resolve(document.modelContext.registerTool(tool, { signal: lifecycle.signal })).catch(() => {}); } catch { /* Unsupported experimental API. */ }
   };
   register({ name: "nextset_get_selection", description: "Read the selected DJ set and active filters.", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, untrustedContentHint: true }, execute: snapshot });
-  register({ name: "nextset_select_set", description: "Select another DJ set with the specified filters; stops the current video without starting audio.", inputSchema: { type: "object", properties: { genre: { type: ["string", "null"] }, duration: { enum: DURATIONS }, year: { type: ["integer", "null"] } }, additionalProperties: false }, annotations: { readOnlyHint: false, untrustedContentHint: true }, execute: async input => {
+  register({ name: "nextset_select_set", description: "Select another DJ set with the specified filters; stops the current video without starting audio.", inputSchema: { type: "object", properties: { genre: { type: ["string", "null"] }, duration: { type: "string" }, year: { type: ["integer", "null"] } }, additionalProperties: false }, annotations: { readOnlyHint: false, untrustedContentHint: true }, execute: async input => {
     if (state.catalogStatus !== "ready") throw new Error("Catalog unavailable");
     if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => !["genre", "duration", "year"].includes(key))) throw new Error("Invalid filters");
     const filters = { ...state.filters, ...input };
     const options = catalogOptions(state.catalog);
-    if ((filters.genre !== null && !options.genres.includes(filters.genre)) || !DURATIONS.includes(filters.duration) || (filters.year !== null && !options.years.includes(filters.year))) throw new Error("Invalid filters");
+    if ((filters.genre !== null && !options.genres.includes(filters.genre)) ||
+        (filters.duration !== "all" && !options.durations.some(duration => normalizeApproxDuration(duration) === filters.duration)) ||
+        (filters.year !== null && !options.years.includes(filters.year))) throw new Error("Invalid filters");
     ui.genre.value = filters.genre ?? ""; ui.duration.value = filters.duration; ui.year.value = filters.year ?? "";
     await updateFilters(); return snapshot();
   }});

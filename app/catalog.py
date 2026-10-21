@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, quote, urlsplit
 
 import httpx
 
-from app.config import FIELDS, Settings, normalize_header
+from app.config import COUNTRY_FLAGS, FIELDS, Settings, normalize_header
 from app.models import CatalogResponse, DJSet
 
 logger = logging.getLogger("nextset.catalog")
@@ -70,9 +70,25 @@ def parse_row(values: dict) -> DJSet:
     if not isinstance(genre_cell, str):
         raise ValueError("genres non validi")
     # CustomGenres uses commas; keep compatibility with semicolon catalogs.
-    genres = list(dict.fromkeys(" ".join(g.split()).lower() for g in re.split(r"[,;]", genre_cell) if g.strip()))
+    genres, seen_genres = [], set()
+    for value in re.split(r"[,;]", genre_cell):
+        genre = " ".join(value.split())
+        key = genre.casefold()
+        if genre and key not in seen_genres:
+            genres.append(genre)
+            seen_genres.add(key)
     if not genres:
         raise ValueError("genres mancanti")
+    event_type = values.get("event_type")
+    if isinstance(event_type, str):
+        event_type = event_type.strip() or None
+    else:
+        event_type = None
+    duration_approx = values.get("duration_approx")
+    if isinstance(duration_approx, str):
+        duration_approx = " ".join(duration_approx.split()) or None
+    else:
+        duration_approx = None
     duration = values["duration_minutes"]
     if isinstance(duration, bool) or not isinstance(duration, (str, int, float)):
         raise ValueError("duration_minutes non valida")
@@ -91,7 +107,8 @@ def parse_row(values: dict) -> DJSet:
         year = int(year.strip())
     if not math.isfinite(year) or year != int(year) or not 1000 <= year <= 9999:
         raise ValueError("year non valido")
-    return DJSet(youtube_id=video_id, title=title.strip(), genres=genres,
+    return DJSet(youtube_id=video_id, title=title.strip(), event_type=event_type,
+                 duration_approx=duration_approx, genres=genres,
                  duration_minutes=duration, year=int(year))
 
 
@@ -109,9 +126,26 @@ def normalize_catalog(payload, column_map: dict[str, str]) -> list[DJSet]:
             logger.warning("catalog_schema_invalid field=%s reason=missing_or_duplicate_header", field)
             raise CatalogError("CATALOG_SCHEMA_INVALID")
         indexes[field] = headers.index(header)
+    event_name_indexes = [i for i, header in enumerate(headers) if header == normalize_header("EventName")]
+    country_indexes = [i for i, header in enumerate(headers) if header == normalize_header("Country")]
+    event_type_indexes = [i for i, header in enumerate(headers) if header == normalize_header("EventType")]
+    duration_approx_indexes = [i for i, header in enumerate(headers) if header == normalize_header("DurationApprox")]
+    event_name_index = event_name_indexes[0] if len(event_name_indexes) == 1 else None
+    country_index = country_indexes[0] if len(country_indexes) == 1 else None
+    event_type_index = event_type_indexes[0] if len(event_type_indexes) == 1 else None
+    duration_approx_index = duration_approx_indexes[0] if len(duration_approx_indexes) == 1 else None
     items, seen = [], set()
     for row_number, row in enumerate(rows[1:], start=2):
         cells = {field: row[index] if index < len(row) else None for field, index in indexes.items()}
+        cells["event_type"] = row[event_type_index] if event_type_index is not None and event_type_index < len(row) else None
+        cells["duration_approx"] = row[duration_approx_index] if duration_approx_index is not None and duration_approx_index < len(row) else None
+        artist = cells["title"]
+        event_name = row[event_name_index] if event_name_index is not None and event_name_index < len(row) else None
+        country = row[country_index] if country_index is not None and country_index < len(row) else None
+        if isinstance(artist, str) and isinstance(event_name, str) and event_name.strip():
+            country_name = country.strip().title() if isinstance(country, str) else ""
+            flag = COUNTRY_FLAGS.get(country_name, "")
+            cells["title"] = f"{artist.strip()} @ {event_name.strip()}" + (f" {flag}" if flag else "")
         try:
             item = parse_row(cells)
         except (ValueError, TypeError, OverflowError) as error:
@@ -141,9 +175,10 @@ def retry_after_seconds(value: str | None) -> int | None:
         return None
 
 
-async def fetch_catalog(client: httpx.AsyncClient, settings: Settings) -> CatalogResponse:
+async def fetch_catalog(client: httpx.AsyncClient, settings: Settings, *, curated: bool = False) -> CatalogResponse:
     started = time.monotonic()
-    url = f"https://sheets.googleapis.com/v4/spreadsheets/{settings.sheet_id}/values/{quote(settings.sheet_range, safe='')}"
+    sheet_range = settings.catalog_range(curated)
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{settings.sheet_id}/values/{quote(sheet_range, safe='')}"
     final_status = "error"
     try:
         async with asyncio.timeout(TOTAL_TIMEOUT):

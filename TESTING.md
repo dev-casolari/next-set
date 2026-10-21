@@ -1,32 +1,40 @@
-# Resoconto di verifica
+# Verification notes
 
-Aggiornamento: 2 ottobre 2026. Ambiente: Linux x86_64, Python 3.12.14, Node 24.19.0.
+Updated: 21 October 2026. Environment: Linux x86_64, Python 3.12.14, Node 24.19.0.
 
-## Foglio fornito
+## Results
 
-- Accesso anonimo alla pagina del Google Sheet verificato il 2 ottobre 2026; scheda `Sets`.
-- Verificato il mapping `LinkYoutube`, `Artist`, `Year`, `CustomGenres`, con la colonna aggiuntiva `Duration` numerica in minuti.
-- Normalizzati 19 set validi senza duplicati, con 19 generi distinti e durate da 44 a 154 minuti. I generi sono separati sulle virgole, ripuliti e deduplicati; resta supportato il separatore `;` originale.
-- Anteprima aggiornata con una copia esplicitamente datata del catalogo. La lettura API automatica non è attiva: manca la chiave Google Sheets sul server e l'anteprima ospitata è statica.
-- Aggiunto un test di regressione con lo schema del foglio fornito e generi separati da virgole.
+| Check | Result |
+| --- | --- |
+| Backend pytest suite | 58 tests passed |
+| JavaScript selection and player tests | 8 tests passed |
+| Playwright browser suite | 20 tests passed |
+| Supplied example CSV | All 40 rows normalized successfully; copy is byte-identical to the upload |
+| Visual review | Desktop at 1440 px and mobile at 390 px inspected |
 
-## Eseguito
+## Changes covered
 
-- **53 test pytest superati**: formati URL ammessi, host rifiutati, mapping e intestazioni, valori mancanti o invalidi, normalizzazione, duplicati, configurazione, contratto HTTP, header, nessuna esposizione della chiave, lettura nuova a ogni chiamata, catalogo vuoto, codici di errore, retry e limite temporale complessivo, schema reale e separazione dei generi sulle virgole.
-- **6 test JavaScript superati**: confini 59,99/60/119,99/120 minuti, filtri AND, raggiungibilità degli indici della selezione uniforme, esclusione immediata del set corrente, zero/unico candidato, opzioni, metadati, distruzione del player precedente, callback tardivi ignorati, cue da zero, nessuna azione a fine video, errore e timeout recuperabili.
-- **Benchmark Node**: 1.000 set, 1.000 estrazioni con filtri; media rilevata **0,021 ms per estrazione**. Misura della logica pura nel runtime Node, non del browser né della rete/player. Il test Playwright incluso misura separatamente la stessa operazione nel browser.
+- `/api/catalog` and `?curated=false` select `AllSets`; `?curated=true` selects `Sets` in the same configured spreadsheet. Existing worksheet prefixes in `GOOGLE_SHEETS_RANGE` are replaced while the A1 cell range is retained. Invalid boolean queries are rejected before a Google request.
+- Genre labels and tags preserve source capitalization. Duplicate genre options and filtering remain case-insensitive without changing the source data.
+- Switching catalogs refreshes the set count, options, and player, and resets genre, duration, and year. Resetting filters keeps the chosen catalog. Full page reloads and browser back/forward cache restoration start with `AllSets`.
+- Empty and failed catalog loads leave the switch usable. Reload catalog retries the selected source. Aborted or late responses cannot overwrite a newer catalog selection.
+- Existing player lifecycle, duration boundaries, combined filters, no autoplay, error handling, retry limits, request deadlines, and server-side API key handling are covered.
+- Browser layout checks pass at widths of 320, 390, 768, and 1440 px. The larger uppercase NEXT SET button, simplified heading, and new switch were visually inspected.
 
-## Predisposto ma non eseguito
+## Test environment
 
-- Suite Playwright con catalogo e SDK YouTube simulati: interazione con filtri/reset, nessuna richiesta catalogo aggiuntiva, stati zero/unico candidato, assenza autoplay, cambio rapido, errori, ritorno dalla cache di navigazione, testo non interpretato come HTML, tastiera e viewport 320/390/768/1440 px.
-- Verifica browser delle azioni WebMCP tramite registro simulato. Un contesto WebMCP nativo non era disponibile.
-- Le prove browser non sono state eseguite: il download del browser Playwright in questo ambiente ha restituito un archivio inutilizzabile. Non è stata effettuata una verifica visiva del layout.
+Backend tests used the repository's frozen Python dependencies. `npm test` passed; direct execution of the two test files also reported six selection tests and two player tests.
 
-## Da eseguire prima del rilascio con dati reali
+The browser suite ran with Playwright 1.56.0 and Chromium 141.0.7390.37 (build 1194) in an isolated verification environment. The browser download for the locked Playwright version returned an unusable archive, so an older compatible browser environment was used. `pyproject.toml` and `uv.lock` were not changed for this workaround.
 
-- Accesso al Google Sheet effettivo con chiave e mapping del proprietario; aggiunta/modifica/rimozione visibili alla ricarica.
-- Riproduzione reale in HTTPS, controlli YouTube, errore 153/referrer e CSP sul dominio finale.
-- Chrome, Firefox e Safari; Android e iOS reali; zoom testo al 200%.
-- Build ed esecuzione Docker sul servizio di destinazione.
+Google Sheets HTTP responses and the YouTube SDK are mocked in automated tests. These checks verify application behavior without credentials, external playback, or audio.
 
-L'anteprima statica utilizza una copia del catalogo reale del 2 ottobre 2026. ID, intervallo e mapping sono configurati. La lettura Google Sheets API del backend richiede ancora la chiave; il suo collaudo reale e la distribuzione su hosting Python restano da completare.
+## Live deployment checks
+
+Live Google Sheets API access and real YouTube playback were not exercised in this session because the uploaded repository does not include the owner's API key. The new feature includes backend changes, so deploy the full application after updating the repository. Confirm that both `AllSets` and `Sets` exist with the required column headers and are readable by the configured server-side API key.
+
+Real YouTube playback on the final HTTPS domain, other browser engines, physical mobile devices, and the deployment's Docker build remain environment-specific checks.
+
+## Retained historical snapshot
+
+`scripts/catalog-snapshot.json` remains the original 19-set snapshot from 2 October 2026. It is separate from the new 40-row example CSV. The static preview uses one snapshot and disables catalog switching; the configured FastAPI application reads the selected worksheet live.

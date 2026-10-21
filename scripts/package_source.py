@@ -5,10 +5,12 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 target = ROOT / "dist/NextSet.zip"
 target.parent.mkdir(exist_ok=True)
-names = ["app", "tests", "scripts", "README.md", "TESTING.md", "pyproject.toml", "uv.lock", "Dockerfile", ".dockerignore", ".gitignore", ".env.example", "package.json"]
+names = ["app", "tests", "scripts", "examples", "README.md", "TESTING.md", "LICENSE", "pyproject.toml", "uv.lock", "Dockerfile", ".dockerignore", ".gitignore", ".env.example", "package.json", "package-lock.json"]
 with zipfile.ZipFile(target,"w",zipfile.ZIP_DEFLATED) as archive:
     for name in names:
         path=ROOT/name
+        if not path.exists():
+            continue
         files=path.rglob("*") if path.is_dir() else [path]
         for file in sorted(files):
             if file.is_file() and "__pycache__" not in file.parts and file.suffix != ".pyc":

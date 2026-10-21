@@ -2,7 +2,8 @@ export const DEFAULT_FILTERS = Object.freeze({ genre: null, duration: "all", yea
 export const DURATIONS = ["all", "lt60", "60to120", "gte120"];
 
 export function matchesAllFilters(item, filters) {
-  return (!filters.genre || item.genres.includes(filters.genre)) &&
+  const selectedGenre = filters.genre?.toLowerCase();
+  return (!selectedGenre || item.genres.some(genre => genre.toLowerCase() === selectedGenre)) &&
     (filters.year === null || item.year === filters.year) &&
     (filters.duration === "all" ||
       (filters.duration === "lt60" && item.duration_minutes < 60) ||
@@ -18,8 +19,15 @@ export function selectSet(catalog, filters, currentVideoId, rng = Math.random) {
 }
 
 export function catalogOptions(catalog) {
+  const genres = new Map();
+  for (const item of catalog) {
+    for (const genre of item.genres) {
+      const key = genre.toLowerCase();
+      if (!genres.has(key)) genres.set(key, genre);
+    }
+  }
   return {
-    genres: [...new Set(catalog.flatMap(item => item.genres))].sort((a, b) => a.localeCompare(b, "it")),
+    genres: [...genres.values()].sort((a, b) => a.localeCompare(b, "it")),
     years: [...new Set(catalog.map(item => item.year))].sort((a, b) => b - a),
   };
 }

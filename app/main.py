@@ -69,10 +69,10 @@ def create_app(settings: Settings | None = None, transport: httpx.AsyncBaseTrans
         return {"status": "ok"}
 
     @app.get("/api/catalog", response_model=CatalogResponse)
-    async def catalog(request: Request, response: Response):
+    async def catalog(request: Request, response: Response, curated: bool = False):
         response.headers["Cache-Control"] = "no-store"
         try:
-            return await fetch_catalog(request.app.state.http, request.app.state.settings)
+            return await fetch_catalog(request.app.state.http, request.app.state.settings, curated=curated)
         except CatalogError:
             raise
         except Exception as error:

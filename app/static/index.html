@@ -21,14 +21,20 @@
     <p id="demo-notice" class="demo-notice" hidden>Preview · Demo catalog, not connected to your Google Sheet.</p>
     <div class="workspace">
       <aside class="filters" aria-labelledby="filters-heading">
-        <div class="filter-heading"><h1 id="filters-heading">Your sound.</h1><span class="section-index" aria-hidden="true">01 /</span></div>
-        <p class="filter-intro">Choose the vibe.<br>Chance takes care of the rest.</p>
+        <div class="filter-heading"><h1 id="filters-heading">Choose the vibe</h1></div>
         <form id="filters-form">
           <div class="field"><label for="genre">Genre</label><select id="genre" name="genre" disabled><option value="">All genres</option></select></div>
           <div class="field"><label for="duration">Duration</label><select id="duration" name="duration" disabled><option value="all">Any duration</option><option value="lt60">Under 60 minutes</option><option value="60to120">60 to under 120 min</option><option value="gte120">120 minutes or more</option></select></div>
           <div class="field"><label for="year">Set year</label><select id="year" name="year" disabled><option value="">All years</option></select></div>
           <button id="reset" type="button" class="reset-button" disabled>Reset filters</button>
         </form>
+        <label class="catalog-switch" for="only-curated">
+          <span>Only curated sets</span>
+          <span class="switch-control">
+            <input id="only-curated" type="checkbox" role="switch" autocomplete="off">
+            <span class="switch-track" aria-hidden="true"></span>
+          </span>
+        </label>
         <div class="catalog-summary"><span class="eyebrow">IN CATALOG</span><p><strong id="catalog-total">—</strong> <span id="catalog-total-label">DJ sets</span></p></div>
       </aside>
       <main id="main" class="main" tabindex="-1">
@@ -39,7 +45,7 @@
               <span class="loader" id="loader" aria-hidden="true"></span>
               <p id="frame-message-title">Loading catalog</p>
               <p id="frame-message-detail">One moment, choosing your next set.</p>
-              <button id="reload" type="button" class="secondary-button" hidden>Reload page</button>
+              <button id="reload" type="button" class="secondary-button" hidden>Reload catalog</button>
             </div>
           </div>
           <p class="player-error" id="player-error" role="status" hidden></p>
@@ -50,7 +56,7 @@
             <h2 id="set-title">The next one might surprise you.</h2>
             <div class="metadata" id="metadata" hidden><div id="genres" class="genre-list" aria-label="Genres"></div><span class="meta-divider" aria-hidden="true"></span><span id="set-duration"></span><span id="set-year"></span></div>
           </div>
-          <div class="next-action"><button id="next" type="button" class="next-button" disabled>Next Set<span class="button-mark" aria-hidden="true">+1</span></button><p id="play-hint">Press Play on the video to listen.</p></div>
+          <div class="next-action"><button id="next" type="button" class="next-button" disabled>NEXT SET</button><p id="play-hint">Press Play on the video to listen.</p></div>
         </section>
         <p class="selection-note" id="selection-note"></p>
         <p class="sr-only" id="announcement" aria-live="polite" aria-atomic="true"></p>

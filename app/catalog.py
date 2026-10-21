@@ -70,7 +70,13 @@ def parse_row(values: dict) -> DJSet:
     if not isinstance(genre_cell, str):
         raise ValueError("genres non validi")
     # CustomGenres uses commas; keep compatibility with semicolon catalogs.
-    genres = list(dict.fromkeys(" ".join(g.split()).lower() for g in re.split(r"[,;]", genre_cell) if g.strip()))
+    genres, seen_genres = [], set()
+    for value in re.split(r"[,;]", genre_cell):
+        genre = " ".join(value.split())
+        key = genre.casefold()
+        if genre and key not in seen_genres:
+            genres.append(genre)
+            seen_genres.add(key)
     if not genres:
         raise ValueError("genres mancanti")
     duration = values["duration_minutes"]
@@ -141,9 +147,10 @@ def retry_after_seconds(value: str | None) -> int | None:
         return None
 
 
-async def fetch_catalog(client: httpx.AsyncClient, settings: Settings) -> CatalogResponse:
+async def fetch_catalog(client: httpx.AsyncClient, settings: Settings, *, curated: bool = False) -> CatalogResponse:
     started = time.monotonic()
-    url = f"https://sheets.googleapis.com/v4/spreadsheets/{settings.sheet_id}/values/{quote(settings.sheet_range, safe='')}"
+    sheet_range = settings.catalog_range(curated)
+    url = f"https://sheets.googleapis.com/v4/spreadsheets/{settings.sheet_id}/values/{quote(sheet_range, safe='')}"
     final_status = "error"
     try:
         async with asyncio.timeout(TOTAL_TIMEOUT):

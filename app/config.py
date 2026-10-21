@@ -42,6 +42,12 @@ class Settings:
         if self.log_level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
             raise ValueError("LOG_LEVEL non valido")
 
+    def catalog_range(self, curated: bool = False) -> str:
+        """Reuse configured cells while selecting the requested catalog worksheet."""
+        cells = self.sheet_range.rsplit("!", 1)[-1].strip()
+        worksheet = "Sets" if curated else "AllSets"
+        return f"{worksheet}!{cells}"
+
     @classmethod
     def from_env(cls):
         names = ("GOOGLE_SHEETS_ID", "GOOGLE_SHEETS_RANGE", "GOOGLE_SHEETS_API_KEY", "SHEET_COLUMN_MAP")

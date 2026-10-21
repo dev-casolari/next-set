@@ -2,12 +2,15 @@ import { DEFAULT_FILTERS, DURATIONS, catalogOptions, formatDuration, selectSet }
 import { SetPlayer } from "./player.js";
 
 const $ = id => document.getElementById(id);
-const ui = Object.fromEntries(["genre", "duration", "year", "reset", "next", "reload", "frame-message", "frame-message-title", "frame-message-detail", "loader", "player-frame", "player-error", "set-title", "metadata", "genres", "set-duration", "set-year", "catalog-total", "selection-note", "announcement", "play-hint", "set-eyebrow"].map(id => [id, $(id)]));
-const state = { catalog: [], filters: { ...DEFAULT_FILTERS }, currentVideoId: null, catalogStatus: "loading", playerStatus: "idle", selectionVersion: 0, candidates: 0, item: null };
+const ui = Object.fromEntries(["genre", "duration", "year", "reset", "only-curated", "next", "reload", "frame-message", "frame-message-title", "frame-message-detail", "loader", "player-frame", "player-error", "set-title", "metadata", "genres", "set-duration", "set-year", "catalog-total", "selection-note", "announcement", "play-hint", "set-eyebrow"].map(id => [id, $(id)]));
+const state = { catalog: [], curated: false, filters: { ...DEFAULT_FILTERS }, currentVideoId: null, catalogStatus: "loading", playerStatus: "idle", selectionVersion: 0, candidates: 0, item: null };
 let catalogController;
 let catalogVersion = 0;
 const preview = document.body.dataset.preview === "true";
 $("demo-notice").hidden = !preview;
+// Static previews contain one snapshot; only the connected app can switch sheets.
+ui["only-curated"].disabled = preview;
+if (preview) ui["only-curated"].title = "Catalog switching is available in the connected app.";
 
 function announce(message) { ui.announcement.textContent = message; }
 function controls() {
@@ -87,7 +90,7 @@ function reset() {
 }
 function fillOptions() {
   const options = catalogOptions(state.catalog);
-  ui.genre.replaceChildren(new Option("All genres", ""), ...options.genres.map(g => new Option(g[0].toUpperCase() + g.slice(1), g)));
+  ui.genre.replaceChildren(new Option("All genres", ""), ...options.genres.map(g => new Option(g, g)));
   ui.year.replaceChildren(new Option("All years", ""), ...options.years.map(y => new Option(String(y), String(y))));
 }
 
@@ -98,15 +101,19 @@ function validCatalog(data) {
     Number.isFinite(item.duration_minutes) && item.duration_minutes > 0 && Number.isInteger(item.year) && item.year >= 1000 && item.year <= 9999);
 }
 
-async function initialize() {
+async function initialize(curated = state.curated) {
   const version = ++catalogVersion;
   catalogController?.abort();
   catalogController = new AbortController();
   const controller = catalogController;
   player.clear(++state.selectionVersion);
-  Object.assign(state, { catalog: [], filters: { ...DEFAULT_FILTERS }, currentVideoId: null, catalogStatus: "loading", playerStatus: "idle", candidates: 0, item: null });
-  ui.genre.value = ""; ui.duration.value = "all"; ui.year.value = "";
+  Object.assign(state, { catalog: [], curated, filters: { ...DEFAULT_FILTERS }, currentVideoId: null, catalogStatus: "loading", playerStatus: "idle", candidates: 0, item: null });
+  ui["only-curated"].checked = curated;
+  ui.genre.replaceChildren(new Option("All genres", ""));
+  ui.year.replaceChildren(new Option("All years", ""));
+  ui.duration.value = "all";
   ui["catalog-total"].textContent = "—";
+  ui["set-title"].textContent = "Choosing your next set.";
   ui["selection-note"].textContent = "";
   ui["player-error"].hidden = true;
   renderItem(null); controls();
@@ -114,7 +121,8 @@ async function initialize() {
   announce("Loading catalog");
   const timeout = setTimeout(() => controller.abort(), 12000);
   try {
-    const response = await fetch(preview ? "/preview-catalog.json" : "/api/catalog", { cache: "no-store", signal: controller.signal });
+    const catalogUrl = preview ? "/preview-catalog.json" : curated ? "/api/catalog?curated=true" : "/api/catalog";
+    const response = await fetch(catalogUrl, { cache: "no-store", signal: controller.signal });
     if (!response.ok) {
       const problem = await response.json().catch(() => ({}));
       throw new Error(problem.error?.code || "unavailable");
@@ -127,8 +135,8 @@ async function initialize() {
     if (!data.items.length) {
       state.catalogStatus = "empty";
       ui["set-title"].textContent = "The catalog is currently empty.";
-      frame("Catalog empty", "There are no DJ sets available. Reload the page to try again.", false, true);
-      announce("Catalog empty. Reload the page to try again.");
+      frame("Catalog empty", "There are no DJ sets available. Reload the catalog or change your catalog selection.", false, true);
+      announce("Catalog empty. Reload the catalog or change your catalog selection.");
       controls(); return;
     }
     fillOptions();
@@ -144,24 +152,25 @@ async function initialize() {
       CATALOG_SCHEMA_INVALID: "The catalog format is invalid.",
     };
     const message = controller.signal.aborted ? reasons.CATALOG_TIMEOUT : reasons[error.message] || "Unable to load the catalog.";
-    frame(message, "Reload the page to try again.", false, true);
-    announce(`${message} Reload the page to try again.`);
+    frame(message, "Reload the catalog or change your catalog selection.", false, true);
+    announce(`${message} Reload the catalog or change your catalog selection.`);
     controls();
   } finally { clearTimeout(timeout); }
 }
 
 for (const key of ["genre", "duration", "year"]) ui[key].addEventListener("change", updateFilters);
 ui.reset.addEventListener("click", reset);
+ui["only-curated"].addEventListener("change", () => void initialize(ui["only-curated"].checked));
 ui.next.addEventListener("click", select);
-ui.reload.addEventListener("click", () => window.location.reload());
+ui.reload.addEventListener("click", () => void initialize());
 $("filters-form").addEventListener("submit", event => event.preventDefault());
-window.addEventListener("pageshow", event => { if (event.persisted) void initialize(); });
+window.addEventListener("pageshow", event => { if (event.persisted) void initialize(false); });
 window.addEventListener("pagehide", () => { ++catalogVersion; catalogController?.abort(); player.clear(++state.selectionVersion); });
 
 // Progressive enhancement: all tools act on the same state as the visible controls.
 if (document.modelContext?.registerTool) {
   const lifecycle = new AbortController();
-  const snapshot = () => ({ filters: state.filters, current: state.item, candidates: state.candidates, playerStatus: state.playerStatus });
+  const snapshot = () => ({ curated: state.curated, filters: state.filters, current: state.item, candidates: state.candidates, playerStatus: state.playerStatus });
   const register = tool => {
     try { Promise.resolve(document.modelContext.registerTool(tool, { signal: lifecycle.signal })).catch(() => {}); } catch { /* Unsupported experimental API. */ }
   };

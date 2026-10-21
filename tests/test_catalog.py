@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timezone
 import json
+from urllib.parse import unquote
 
 import httpx
 import pytest
@@ -40,7 +41,7 @@ def test_normalization_dedup_first_valid_and_mapping():
     items = normalize_catalog({"values":rows}, MAPPING)
     assert len(items) == 1
     assert items[0].title == "A set"
-    assert items[0].genres == ["house", "deep house"]
+    assert items[0].genres == ["HOUSE", "Deep House"]
     assert items[0].duration_minutes == 60
     assert items[0].year == 2024
     assert normalize_catalog({"values":[HEADERS]}, MAPPING) == []
@@ -63,7 +64,7 @@ def test_owner_sheet_mapping_and_comma_separated_genres():
     assert result[0].title == "Axwell"
     assert result[0].year == 2025
     assert result[0].duration_minutes == 59
-    assert result[0].genres == ["edm", "mainstage", "progressive house", "electro house"]
+    assert result[0].genres == ["EDM", "Mainstage", "Progressive House", "Electro House"]
     assert "Country" not in result[0].model_dump()
 
 
@@ -115,6 +116,54 @@ def test_http_routes_fresh_read_security_and_no_key_leak(settings):
         assert datetime.fromisoformat(result.json()["fetched_at"].replace("Z","+00:00")).tzinfo == timezone.utc
         assert client.get("/api/catalog").json()["items"] == []
         assert len(requests) == 2
+
+
+@pytest.mark.parametrize("configured_range,cells", [
+    ("Sets!A:Z", "A:Z"),
+    ("'DJ Sets'!A1:Z", "A1:Z"),
+    ("AllSets!B1:P500", "B1:P500"),
+    ("A:Z", "A:Z"),
+])
+def test_catalog_switch_reads_selected_worksheet(configured_range, cells):
+    config = Settings("the_same_spreadsheet", configured_range, "unit-test-key", MAPPING)
+    requests = []
+    def upstream(request):
+        requests.append(request)
+        path = unquote(request.url.path)
+        assert request.url.host == "sheets.googleapis.com"
+        assert path.startswith("/v4/spreadsheets/the_same_spreadsheet/values/")
+        assert request.headers["X-Goog-Api-Key"] == "unit-test-key"
+        selected_range = path.rsplit("/", 1)[-1]
+        assert selected_range in {f"AllSets!{cells}", f"Sets!{cells}"}
+        row = VALID.copy()
+        row[1] = "Curated set" if selected_range == f"Sets!{cells}" else "Full catalog set"
+        row[2] = "Tech House, EDM, Melodic House/Techno"
+        return httpx.Response(200, json={"values": [HEADERS, row]})
+    with TestClient(create_app(config, httpx.MockTransport(upstream))) as client:
+        for query, expected_title in [
+            ("", "Full catalog set"),
+            ("?curated=true", "Curated set"),
+            ("?curated=false", "Full catalog set"),
+        ]:
+            response = client.get(f"/api/catalog{query}")
+            assert response.status_code == 200
+            assert response.headers["cache-control"] == "no-store"
+            item = response.json()["items"][0]
+            assert item["title"] == expected_title
+            assert item["genres"] == ["Tech House", "EDM", "Melodic House/Techno"]
+    assert len(requests) == 3
+
+
+def test_invalid_curated_query_does_not_read_google(settings):
+    requests = []
+    def upstream(request):
+        requests.append(request)
+        return httpx.Response(200, json={"values": [HEADERS, VALID]})
+    with TestClient(create_app(settings, httpx.MockTransport(upstream))) as client:
+        response = client.get("/api/catalog?curated=not-a-boolean")
+        assert response.status_code == 422
+        assert response.headers["cache-control"] == "no-store"
+    assert requests == []
 
 
 @pytest.mark.parametrize("status,expected_code,expected_status", [(400,"CATALOG_UNAVAILABLE",503),(401,"CATALOG_UNAVAILABLE",503),(403,"CATALOG_UNAVAILABLE",503),(404,"CATALOG_UNAVAILABLE",503),(429,"CATALOG_RATE_LIMITED",503),(500,"CATALOG_UNAVAILABLE",503)])

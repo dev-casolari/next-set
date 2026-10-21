@@ -10,6 +10,7 @@ from pathlib import Path
 import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from playwright.sync_api import expect, sync_playwright
@@ -21,6 +22,10 @@ ITEMS = [
     {"youtube_id":"BbCdEf12345","title":"House one hour","genres":["house","disco"],"duration_minutes":60,"year":2024},
     {"youtube_id":"CbCdEf12345","title":"Techno two hours","genres":["techno"],"duration_minutes":120,"year":2023},
     {"youtube_id":"DbCdEf12345","title":"House long","genres":["house"],"duration_minutes":119.99,"year":2022},
+]
+CURATED_ITEMS = [
+    {"youtube_id":"EbCdEf12345","title":"Curated sunset","genres":["EDM","Deep House","nuDisco"],"duration_minutes":90,"year":2025},
+    {"youtube_id":"FbCdEf12345","title":"Curated warehouse","genres":["Tech House"],"duration_minutes":125,"year":2026},
 ]
 SDK = r"""
 window.__players=[]; window.__played=0; window.__autoCue=true;
@@ -74,7 +79,22 @@ def open_catalog(page,base_url,items=ITEMS,status=200,error=None):
     def respond(route):
         calls.append(route.request.url)
         route.fulfill(status=status,json=error or {"fetched_at":"2026-10-01T12:00:00Z","items":items},headers={"Cache-Control":"no-store"})
-    page.route("**/api/catalog",respond)
+    page.route("**/api/catalog*",respond)
+    page.goto(base_url)
+    return calls
+
+
+def is_curated(url):
+    return parse_qs(urlsplit(url).query).get("curated", ["false"])[0] == "true"
+
+
+def open_catalog_sources(page,base_url):
+    calls=[]
+    def respond(route):
+        curated=is_curated(route.request.url)
+        calls.append(curated)
+        route.fulfill(json={"fetched_at":"2026-10-21T12:00:00Z","items":CURATED_ITEMS if curated else ITEMS},headers={"Cache-Control":"no-store"})
+    page.route("**/api/catalog*",respond)
     page.goto(base_url)
     return calls
 
@@ -91,7 +111,7 @@ def test_manual_player_filters_reset_and_single_result(page,base_url):
     page.select_option("#duration","60to120")
     page.select_option("#year","2024")
     expect(page.locator("#set-title")).to_have_text("House one hour")
-    expect(page.locator("#selection-note")).to_contain_text("Un solo")
+    expect(page.locator("#selection-note")).to_contain_text("Only one DJ set")
     expect(page.locator("#next")).to_be_disabled()
     before=page.evaluate("window.__players.length")
     page.select_option("#duration","all")
@@ -114,7 +134,7 @@ def test_no_results_destroys_player_and_reset_recovers(page,base_url):
     expect(page.locator("#next")).to_be_enabled()
     page.select_option("#genre","techno")
     page.select_option("#year","2024")
-    expect(page.locator("#frame-message-title")).to_have_text("Nessun DJ set corrisponde ai filtri selezionati")
+    expect(page.locator("#frame-message-title")).to_have_text("No DJ set matches the selected filters")
     expect(page.locator("#youtube-player iframe")).to_have_count(0)
     expect(page.locator("#next")).to_be_disabled()
     expect(page.locator("#reset")).to_be_enabled()
@@ -139,13 +159,161 @@ def test_late_callbacks_do_not_replace_latest_selection_and_error_recovers(page,
     expect(page.locator("#player-error")).to_be_hidden()
 
 
-@pytest.mark.parametrize("status,items,error,title",[(200,[],None,"Catalogo vuoto"),(503,[],{"error":{"code":"CATALOG_RATE_LIMITED"}},"temporaneamente occupato"),(502,[],{"error":{"code":"CATALOG_SCHEMA_INVALID"}},"formato previsto")])
+@pytest.mark.parametrize("status,items,error,title",[(200,[],None,"Catalog empty"),(503,[],{"error":{"code":"CATALOG_RATE_LIMITED"}},"temporarily busy"),(502,[],{"error":{"code":"CATALOG_SCHEMA_INVALID"}},"format is invalid")])
 def test_catalog_failure_states(page,base_url,status,items,error,title):
     open_catalog(page,base_url,items,status,error)
     expect(page.locator("#frame-message-title")).to_contain_text(title)
     expect(page.locator("#reload")).to_be_visible()
     expect(page.locator("#next")).to_be_disabled()
     expect(page.locator("#genre")).to_be_disabled()
+
+
+def test_curated_toggle_updates_catalog_and_filters_with_source_casing(page,base_url):
+    calls=open_catalog_sources(page,base_url)
+    switch=page.get_by_role("switch",name="Only curated sets")
+    expect(page.locator("#next")).to_be_enabled()
+    expect(switch).not_to_be_checked()
+    expect(page.locator("#catalog-total")).to_have_text("4")
+    expect(page.locator('#genre option[value="house"]')).to_have_text("house")
+    expect(page.locator("#genres .genre-tag")).to_have_text(["house"])
+    assert page.locator("#genres .genre-tag").evaluate("el => getComputedStyle(el).textTransform") == "none"
+    page.select_option("#genre","house")
+    page.select_option("#duration","60to120")
+    page.select_option("#year","2024")
+    expect(page.locator("#set-title")).to_have_text("House one hour")
+
+    switch.check()
+    expect(page.locator("#next")).to_be_enabled()
+    expect(page.locator("#catalog-total")).to_have_text("2")
+    expect(page.locator("#set-title")).to_have_text("Curated sunset")
+    expect(page.locator("#genre")).to_have_value("")
+    expect(page.locator("#duration")).to_have_value("all")
+    expect(page.locator("#year")).to_have_value("")
+    assert set(page.locator("#genre option").all_text_contents()) == {"All genres","EDM","Deep House","nuDisco","Tech House"}
+    expect(page.locator("#genres .genre-tag")).to_have_text(["EDM","Deep House","nuDisco"])
+    page.select_option("#genre","Tech House")
+    expect(page.locator("#set-title")).to_have_text("Curated warehouse")
+    expect(page.locator("#next")).to_be_disabled()
+    page.locator("#reset").click()
+    expect(switch).to_be_checked()
+    expect(page.locator("#next")).to_be_enabled()
+    assert calls == [False,True]
+
+    switch.uncheck()
+    expect(page.locator("#next")).to_be_enabled()
+    expect(page.locator("#catalog-total")).to_have_text("4")
+    expect(page.locator("#set-title")).to_have_text("House short")
+    expect(page.locator('#genre option[value="EDM"]')).to_have_count(0)
+    assert calls == [False,True,False]
+    assert page.evaluate("window.__played") == 0
+
+
+@pytest.mark.parametrize("curated_status",[200,503])
+def test_empty_or_failed_curated_catalog_can_switch_back(page,base_url,curated_status):
+    calls=[]
+    def respond(route):
+        curated=is_curated(route.request.url)
+        calls.append(curated)
+        if curated and curated_status != 200:
+            route.fulfill(status=curated_status,json={"error":{"code":"CATALOG_UNAVAILABLE"}})
+        else:
+            route.fulfill(json={"fetched_at":"2026-10-21T12:00:00Z","items":[] if curated else ITEMS})
+    page.route("**/api/catalog*",respond)
+    page.goto(base_url)
+    expect(page.locator("#next")).to_be_enabled()
+    switch=page.get_by_role("switch",name="Only curated sets")
+    switch.check()
+    expect(page.locator("#reload")).to_be_visible()
+    expect(page.locator("#genre")).to_be_disabled()
+    expect(switch).to_be_enabled()
+    expect(switch).to_be_checked()
+    expect(page.locator("#youtube-player iframe")).to_have_count(0)
+    switch.uncheck()
+    expect(page.locator("#next")).to_be_enabled()
+    expect(page.locator("#set-title")).to_have_text("House short")
+    expect(page.locator("#reload")).to_be_hidden()
+    assert calls == [False,True,False]
+
+
+def test_retry_keeps_the_selected_catalog(page,base_url):
+    calls=[]
+    def respond(route):
+        curated=is_curated(route.request.url)
+        calls.append(curated)
+        if curated and calls.count(True) == 1:
+            route.fulfill(status=503,json={"error":{"code":"CATALOG_UNAVAILABLE"}})
+        else:
+            route.fulfill(json={"fetched_at":"2026-10-21T12:00:00Z","items":CURATED_ITEMS if curated else ITEMS})
+    page.route("**/api/catalog*",respond)
+    page.goto(base_url)
+    expect(page.locator("#next")).to_be_enabled()
+    switch=page.get_by_role("switch",name="Only curated sets")
+    switch.check()
+    expect(page.locator("#reload")).to_be_visible()
+    page.evaluate("window.__sameDocument = true")
+    page.locator("#reload").click()
+    expect(page.locator("#next")).to_be_enabled()
+    expect(switch).to_be_checked()
+    expect(page.locator("#set-title")).to_have_text("Curated sunset")
+    assert page.evaluate("window.__sameDocument") is True
+    assert calls == [False,True,True]
+
+
+def test_late_catalog_response_cannot_replace_newer_source(page,base_url):
+    # Delay decoding a received response to exercise stale-response protection
+    # even after aborting the original HTTP request can no longer discard it.
+    page.add_init_script("""
+      const nativeFetch = window.fetch.bind(window);
+      window.fetch = async (url, options) => {
+        const response = await nativeFetch(url, options);
+        if (String(url).includes('/api/catalog') && new URL(url, location.origin).searchParams.get('curated') === 'true') {
+          window.__curatedSignal = options.signal;
+          const nativeJson = response.json.bind(response);
+          response.json = async () => {
+            const data = await nativeJson();
+            await new Promise(resolve => { window.__releaseCurated = resolve; });
+            window.__lateBodyReturned = true;
+            return data;
+          };
+        }
+        return response;
+      };
+    """)
+    calls=open_catalog_sources(page,base_url)
+    expect(page.locator("#next")).to_be_enabled()
+    switch=page.get_by_role("switch",name="Only curated sets")
+    switch.check()
+    page.wait_for_function("typeof window.__releaseCurated === 'function'")
+    expect(page.locator("#genre")).to_be_disabled()
+    expect(switch).to_be_enabled()
+    switch.uncheck()
+    expect(page.locator("#next")).to_be_enabled()
+    assert page.evaluate("window.__curatedSignal.aborted") is True
+    page.evaluate("window.__releaseCurated()")
+    page.wait_for_function("window.__lateBodyReturned === true")
+    expect(switch).not_to_be_checked()
+    expect(page.locator("#catalog-total")).to_have_text("4")
+    expect(page.locator("#set-title")).to_have_text("House short")
+    expect(page.locator('#genre option[value="EDM"]')).to_have_count(0)
+    assert calls == [False,True,False]
+
+
+@pytest.mark.parametrize("restore",["reload","bfcache"])
+def test_page_restore_starts_with_all_sets(page,base_url,restore):
+    calls=open_catalog_sources(page,base_url)
+    expect(page.locator("#next")).to_be_enabled()
+    switch=page.get_by_role("switch",name="Only curated sets")
+    switch.check()
+    expect(page.locator("#set-title")).to_have_text("Curated sunset")
+    if restore == "reload":
+        page.reload()
+    else:
+        page.evaluate("window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}))")
+    expect(page.locator("#next")).to_be_enabled()
+    expect(switch).not_to_be_checked()
+    expect(page.locator("#catalog-total")).to_have_text("4")
+    expect(page.locator("#set-title")).to_have_text("House short")
+    assert calls == [False,True,False]
 
 
 @pytest.mark.parametrize("width",[320,390,768,1440])

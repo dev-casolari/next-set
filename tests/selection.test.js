@@ -22,6 +22,32 @@ test("options are deduplicated and sorted; exact duration is formatted", () => {
   assert.deepEqual(catalogOptions(catalog),{genres:["house","techno"],years:[2024,2023]});
   assert.equal(formatDuration(92.5),"1 h 32 min 30 s");
 });
+test("genre options keep the first source spelling across case variants", () => {
+  const mixedCase = [
+    item("a",60,["Tech House","EDM"]),
+    item("b",90,["tech house","edm","Deep House"]),
+    item("c",120,["TECH HOUSE","deep house"]),
+  ];
+  const original = structuredClone(mixedCase);
+  assert.deepEqual(catalogOptions(mixedCase).genres,["Deep House","EDM","Tech House"]);
+  assert.deepEqual(mixedCase,original);
+});
+test("genre filtering includes all source case variants and still applies other filters", () => {
+  const mixedCase = [
+    item("a",60,["Tech House"]),
+    item("b",90,["tech house"]),
+    item("c",120,["TECH HOUSE"]),
+    item("d",90,["House"]),
+  ];
+  for (const genre of ["Tech House","tech house","TECH HOUSE"]) {
+    const filters = {...DEFAULT_FILTERS,genre,duration:"60to120"};
+    assert.deepEqual(mixedCase.filter(row => matchesAllFilters(row,filters)).map(row => row.youtube_id),["a","b"]);
+    const selection = selectSet(mixedCase,filters,"a",()=>0);
+    assert.equal(selection.count,2);
+    assert.equal(selection.item.youtube_id,"b");
+  }
+  assert.deepEqual(mixedCase.map(row => row.genres[0]),["Tech House","tech house","TECH HOUSE","House"]);
+});
 test("1000-set filtering and selection budget", () => {
   const large = Array.from({length:1000},(_,i)=>item(String(i),30+i%200,[i%2 ? "house":"techno"],2020+i%5));
   const start = performance.now();

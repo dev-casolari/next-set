@@ -68,7 +68,9 @@ Changing the switch fetches the selected worksheet from the same `GOOGLE_SHEETS_
 | `youtube_url` | `LinkYoutube`: a `watch?v=`, `youtu.be/`, `/embed/`, or `/live/` URL with an 11-character video ID |
 | `title` | Nonempty `Artist` text, followed by `@ EventName` and the matching country flag when those columns are present |
 | `genres` | `CustomGenres`: comma-separated genres, such as `House, Tech House`; semicolons are also supported |
-| `duration_minutes` | `Duration`: a positive number of minutes; use this field rather than `DurationApprox` |
+| `event_type` | Optional `EventType` column, shown before the genre tags in a distinct color |
+| `duration_minutes` | `Duration`: a positive number of minutes, used for the shown duration |
+| `duration_approx` | Optional `DurationApprox` value, used for the exact duration filter options (for example `30min`, `1h`, `1h 30min`) |
 | `year` | `Year`: the performance year as a four-digit integer |
 
 The backend requests unformatted numeric values from Sheets. A numeric cell entered using a decimal comma in an Italian spreadsheet is supported; a text value such as `92,5` or a time-of-day cell is not a substitute for a numeric duration in minutes.
@@ -87,12 +89,12 @@ To try the same schema in a new spreadsheet:
 2. Create `AllSets` with the same header row. You can copy the example rows there initially and then add the rest of your catalog.
 3. Configure the spreadsheet ID, API key, and column mapping as described above.
 
-NextSet reads the five mapped columns and also uses `EventName` and `Country` to add `@ EventName [flag]` after each artist in the set title. The flag is added for countries in the configured flag dictionary; unknown country names leave the flag off. Other fields such as `ID`, `Link1001`, and `Score` do not affect selection. The CSV is sample input for Google Sheets, not an automatic production fallback or a local CSV data source.
+NextSet reads the five mapped columns and also uses `EventName` and `Country` to add `@ EventName [flag]` after each artist in the set title. The optional `EventType` column is shown before genres. The flag is added for countries in the configured flag dictionary; unknown country names leave the flag off. Other fields such as `ID`, `Link1001`, and `Score` do not affect selection. The CSV is sample input for Google Sheets, not an automatic production fallback or a local CSV data source.
 
 ## Behavior
 
 - The catalog is read when the page opens or reloads, and when **Only curated sets** changes. Catalog responses are not cached. Filter changes and **NEXT SET** use the already loaded catalog.
-- Filters are combined with AND: one genre, one year, and one duration band: `< 60`, `60 ≤ duration < 120`, or `≥ 120` minutes.
+- Filters are combined with AND: one genre, one year, and one exact `DurationApprox` value. The displayed duration continues to use `Duration`.
 - Each random selection is uniform across eligible sets, excluding the current video when alternatives exist. Selection history is not persisted.
 - Changing or resetting filters recreates the player from the beginning, even if the same single set remains. No matches remove the player; one match disables **NEXT SET**.
 - Playback starts only when the visitor presses Play in YouTube. There is no autoplay and no automatic selection when a video ends.
@@ -100,7 +102,7 @@ NextSet reads the five mapped columns and also uses `EventName` and `Country` to
 - Google requests have an 8-second total deadline and at most one retry for network errors, HTTP 429, or HTTP 5xx. Browser catalog requests and player loading have 12-second timeouts.
 - The app does not persist selections in cookies, localStorage, or the page URL. YouTube may use its own cookies in the embedded player.
 
-Exactly 120 minutes belongs to the `≥ 120` duration band. A filter change restarts the video even when only one set matches.
+A filter change restarts the video even when only one set matches.
 
 ## HTTP API
 

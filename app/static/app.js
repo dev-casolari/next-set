@@ -1,4 +1,4 @@
-import { DEFAULT_FILTERS, DURATIONS, catalogOptions, formatDuration, selectSet } from "./selection.js";
+import { DEFAULT_FILTERS, catalogOptions, formatDuration, normalizeApproxDuration, selectSet } from "./selection.js";
 import { SetPlayer } from "./player.js";
 
 const $ = id => document.getElementById(id);
@@ -47,12 +47,20 @@ function renderItem(item) {
   ui["set-eyebrow"].hidden = !item;
   if (!item) return;
   ui["set-title"].textContent = item.title;
-  ui.genres.replaceChildren(...item.genres.map(genre => {
+  const tags = item.genres.map(genre => {
     const tag = document.createElement("span");
     tag.className = "genre-tag";
     tag.textContent = genre;
     return tag;
-  }));
+  });
+  if (item.event_type) {
+    const eventType = document.createElement("span");
+    eventType.className = "genre-tag event-type-tag";
+    eventType.textContent = item.event_type;
+    ui.genres.replaceChildren(eventType, ...tags);
+  } else {
+    ui.genres.replaceChildren(...tags);
+  }
   ui["set-duration"].textContent = formatDuration(item.duration_minutes);
   ui["set-year"].textContent = String(item.year);
 }
@@ -91,12 +99,16 @@ function reset() {
 function fillOptions() {
   const options = catalogOptions(state.catalog);
   ui.genre.replaceChildren(new Option("All genres", ""), ...options.genres.map(g => new Option(g, g)));
+  ui.duration.replaceChildren(new Option("Any duration", "all"),
+    ...options.durations.map(duration => new Option(duration, normalizeApproxDuration(duration))));
   ui.year.replaceChildren(new Option("All years", ""), ...options.years.map(y => new Option(String(y), String(y))));
 }
 
 function validCatalog(data) {
   return data && typeof data.fetched_at === "string" && Array.isArray(data.items) && data.items.every(item =>
     /^[A-Za-z0-9_-]{11}$/.test(item.youtube_id) && typeof item.title === "string" && item.title.trim() &&
+    (item.event_type === null || item.event_type === undefined || typeof item.event_type === "string") &&
+    (item.duration_approx === null || item.duration_approx === undefined || typeof item.duration_approx === "string") &&
     Array.isArray(item.genres) && item.genres.length && item.genres.every(g => typeof g === "string" && g.trim()) &&
     Number.isFinite(item.duration_minutes) && item.duration_minutes > 0 && Number.isInteger(item.year) && item.year >= 1000 && item.year <= 9999);
 }
@@ -175,12 +187,14 @@ if (document.modelContext?.registerTool) {
     try { Promise.resolve(document.modelContext.registerTool(tool, { signal: lifecycle.signal })).catch(() => {}); } catch { /* Unsupported experimental API. */ }
   };
   register({ name: "nextset_get_selection", description: "Read the selected DJ set and active filters.", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, untrustedContentHint: true }, execute: snapshot });
-  register({ name: "nextset_select_set", description: "Select another DJ set with the specified filters; stops the current video without starting audio.", inputSchema: { type: "object", properties: { genre: { type: ["string", "null"] }, duration: { enum: DURATIONS }, year: { type: ["integer", "null"] } }, additionalProperties: false }, annotations: { readOnlyHint: false, untrustedContentHint: true }, execute: async input => {
+  register({ name: "nextset_select_set", description: "Select another DJ set with the specified filters; stops the current video without starting audio.", inputSchema: { type: "object", properties: { genre: { type: ["string", "null"] }, duration: { type: "string" }, year: { type: ["integer", "null"] } }, additionalProperties: false }, annotations: { readOnlyHint: false, untrustedContentHint: true }, execute: async input => {
     if (state.catalogStatus !== "ready") throw new Error("Catalog unavailable");
     if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => !["genre", "duration", "year"].includes(key))) throw new Error("Invalid filters");
     const filters = { ...state.filters, ...input };
     const options = catalogOptions(state.catalog);
-    if ((filters.genre !== null && !options.genres.includes(filters.genre)) || !DURATIONS.includes(filters.duration) || (filters.year !== null && !options.years.includes(filters.year))) throw new Error("Invalid filters");
+    if ((filters.genre !== null && !options.genres.includes(filters.genre)) ||
+        (filters.duration !== "all" && !options.durations.some(duration => normalizeApproxDuration(duration) === filters.duration)) ||
+        (filters.year !== null && !options.years.includes(filters.year))) throw new Error("Invalid filters");
     ui.genre.value = filters.genre ?? ""; ui.duration.value = filters.duration; ui.year.value = filters.year ?? "";
     await updateFilters(); return snapshot();
   }});

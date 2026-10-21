@@ -18,7 +18,7 @@ Updated: 21 October 2026. Environment: Linux x86_64, Python 3.12.14, Node 24.19.
 - Genre labels and tags preserve source capitalization. Duplicate genre options and filtering remain case-insensitive without changing the source data.
 - Switching catalogs refreshes the set count, options, and player, and resets genre, duration, and year. Resetting filters keeps the chosen catalog. Full page reloads and browser back/forward cache restoration start with `AllSets`.
 - Empty and failed catalog loads leave the switch usable. Reload catalog retries the selected source. Aborted or late responses cannot overwrite a newer catalog selection.
-- Existing player lifecycle, duration boundaries, combined filters, no autoplay, error handling, retry limits, request deadlines, and server-side API key handling are covered.
+- Existing player lifecycle, exact `DurationApprox` filtering, combined filters, no autoplay, error handling, retry limits, request deadlines, and server-side API key handling are covered.
 - Browser layout checks pass at widths of 320, 390, 768, and 1440 px. The larger uppercase NEXT SET button, simplified heading, and new switch were visually inspected.
 
 ## Test environment

@@ -18,14 +18,14 @@ from playwright.sync_api import expect, sync_playwright
 pytestmark = pytest.mark.skipif(os.getenv("RUN_BROWSER_TESTS") != "1", reason="Enable RUN_BROWSER_TESTS=1 with Playwright browsers installed")
 ROOT = Path(__file__).resolve().parents[1]
 ITEMS = [
-    {"youtube_id":"AbCdEf12345","title":"House short","genres":["house"],"duration_minutes":59.99,"year":2024},
-    {"youtube_id":"BbCdEf12345","title":"House one hour","genres":["house","disco"],"duration_minutes":60,"year":2024},
-    {"youtube_id":"CbCdEf12345","title":"Techno two hours","genres":["techno"],"duration_minutes":120,"year":2023},
-    {"youtube_id":"DbCdEf12345","title":"House long","genres":["house"],"duration_minutes":119.99,"year":2022},
+    {"youtube_id":"AbCdEf12345","title":"House short","genres":["house"],"duration_approx":"30min","duration_minutes":59.99,"year":2024},
+    {"youtube_id":"BbCdEf12345","title":"House one hour","genres":["house","disco"],"duration_approx":"1h","duration_minutes":60,"year":2024},
+    {"youtube_id":"CbCdEf12345","title":"Techno two hours","genres":["techno"],"duration_approx":"2h","duration_minutes":120,"year":2023},
+    {"youtube_id":"DbCdEf12345","title":"House long","genres":["house"],"duration_approx":"1h 30min","duration_minutes":119.99,"year":2022},
 ]
 CURATED_ITEMS = [
-    {"youtube_id":"EbCdEf12345","title":"Curated sunset","genres":["EDM","Deep House","nuDisco"],"duration_minutes":90,"year":2025},
-    {"youtube_id":"FbCdEf12345","title":"Curated warehouse","genres":["Tech House"],"duration_minutes":125,"year":2026},
+    {"youtube_id":"EbCdEf12345","title":"Curated sunset","event_type":"Festival","genres":["EDM","Deep House","nuDisco"],"duration_approx":"1h 30min","duration_minutes":90,"year":2025},
+    {"youtube_id":"FbCdEf12345","title":"Curated warehouse","genres":["Tech House"],"duration_approx":"2h 30min","duration_minutes":125,"year":2026},
 ]
 SDK = r"""
 window.__players=[]; window.__played=0; window.__autoCue=true;
@@ -103,12 +103,13 @@ def test_manual_player_filters_reset_and_single_result(page,base_url):
     calls=open_catalog(page,base_url)
     expect(page.locator("#next")).to_be_enabled()
     expect(page.locator("#set-title")).to_have_text("House short")
+    expect(page.locator("#genres .genre-tag")).to_have_text(["house"])
     page.locator("#next").click()
     expect(page.locator("#set-title")).to_have_text("House one hour")
     expect(page.locator("#next")).to_be_enabled()
     assert page.evaluate("window.__players[0].destroyed")
     page.select_option("#genre","house")
-    page.select_option("#duration","60to120")
+    page.select_option("#duration","1h")
     page.select_option("#year","2024")
     expect(page.locator("#set-title")).to_have_text("House one hour")
     expect(page.locator("#selection-note")).to_contain_text("Only one DJ set")
@@ -174,11 +175,12 @@ def test_curated_toggle_updates_catalog_and_filters_with_source_casing(page,base
     expect(page.locator("#next")).to_be_enabled()
     expect(switch).not_to_be_checked()
     expect(page.locator("#catalog-total")).to_have_text("4")
+    assert page.locator("#duration option").all_text_contents() == ["Any duration","30min","1h","1h 30min","2h"]
     expect(page.locator('#genre option[value="house"]')).to_have_text("house")
     expect(page.locator("#genres .genre-tag")).to_have_text(["house"])
     assert page.locator("#genres .genre-tag").evaluate("el => getComputedStyle(el).textTransform") == "none"
     page.select_option("#genre","house")
-    page.select_option("#duration","60to120")
+    page.select_option("#duration","1h")
     page.select_option("#year","2024")
     expect(page.locator("#set-title")).to_have_text("House one hour")
 
@@ -186,6 +188,8 @@ def test_curated_toggle_updates_catalog_and_filters_with_source_casing(page,base
     expect(page.locator("#next")).to_be_enabled()
     expect(page.locator("#catalog-total")).to_have_text("2")
     expect(page.locator("#set-title")).to_have_text("Curated sunset")
+    expect(page.locator("#genres .genre-tag")).to_have_text(["Festival","EDM","Deep House","nuDisco"])
+    expect(page.locator("#genres .event-type-tag")).to_have_css("color","rgb(242, 210, 155)")
     expect(page.locator("#genre")).to_have_value("")
     expect(page.locator("#duration")).to_have_value("all")
     expect(page.locator("#year")).to_have_value("")
@@ -347,6 +351,9 @@ def test_webmcp_uses_same_state_and_rejects_invalid_filter(page,base_url):
     assert result["candidates"]==1 and result["current"]["title"]=="Techno two hours"
     expect(page.locator("#genre")).to_have_value("techno")
     assert page.evaluate("window.__tools.nextset_get_selection.execute({}).filters.year")==2023
+    result=page.evaluate("window.__tools.nextset_select_set.execute({duration:'2h'})")
+    assert result["candidates"]==1 and result["current"]["title"]=="Techno two hours"
+    assert page.evaluate("window.__tools.nextset_select_set.execute({duration:'4h'}).then(()=>false,()=>true)")
     assert page.evaluate("window.__tools.nextset_select_set.execute({genre:'invalid'}).then(()=>false,()=>true)")
     expect(page.locator("#genre")).to_have_value("techno")
 
@@ -355,9 +362,9 @@ def test_browser_performance_1000_sets(page,base_url):
     open_catalog(page,base_url)
     result=page.evaluate("""async()=>{
       const {selectSet}=await import('/static/selection.js');
-      const items=Array.from({length:1000},(_,i)=>({youtube_id:String(i),genres:['house'],duration_minutes:30+i%200,year:2024}));
+      const items=Array.from({length:1000},(_,i)=>({youtube_id:String(i),genres:['house'],duration_approx:'1h',duration_minutes:30+i%200,year:2024}));
       const start=performance.now();
-      for(let i=0;i<1000;i++) selectSet(items,{genre:'house',duration:'60to120',year:2024},null);
+      for(let i=0;i<1000;i++) selectSet(items,{genre:'house',duration:'1h',year:2024},null);
       return (performance.now()-start)/1000;
     }""")
     print(f"Chromium {page.context.browser.version}: {result:.3f} ms per selection on 1000 records")

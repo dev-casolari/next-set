@@ -10,6 +10,7 @@
 .switch-control input:checked+.switch-track{background:var(--accent);border-color:var(--accent)}
 .switch-control input:checked+.switch-track::after{background:var(--accent-ink);transform:translateX(18px)}
 .switch-control input:focus-visible+.switch-track{outline:3px solid var(--accent);outline-offset:4px}
+.event-type-tag{color:#f2d29b;background:#382b18;border-color:#6b512b}
 .switch-control input:disabled{cursor:not-allowed}
 .switch-control input:disabled+.switch-track{opacity:.4}
 @media(min-width:1600px){.workspace{gap:60px}.main-heading{margin-bottom:26px}}

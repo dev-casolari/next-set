@@ -1,14 +1,21 @@
 export const DEFAULT_FILTERS = Object.freeze({ genre: null, duration: "all", year: null });
-export const DURATIONS = ["all", "lt60", "60to120", "gte120"];
+
+export function normalizeApproxDuration(value) {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en") : "";
+}
+
+function approximateMinutes(value) {
+  const hoursAndMinutes = /^(\d+)\s*h(?:\s*(\d+)\s*(?:min)?)?$/i.exec(value);
+  if (hoursAndMinutes) return Number(hoursAndMinutes[1]) * 60 + Number(hoursAndMinutes[2] || 0);
+  const minutes = /^(\d+)\s*min$/i.exec(value);
+  return minutes ? Number(minutes[1]) : Number.POSITIVE_INFINITY;
+}
 
 export function matchesAllFilters(item, filters) {
   const selectedGenre = filters.genre?.toLowerCase();
   return (!selectedGenre || item.genres.some(genre => genre.toLowerCase() === selectedGenre)) &&
     (filters.year === null || item.year === filters.year) &&
-    (filters.duration === "all" ||
-      (filters.duration === "lt60" && item.duration_minutes < 60) ||
-      (filters.duration === "60to120" && item.duration_minutes >= 60 && item.duration_minutes < 120) ||
-      (filters.duration === "gte120" && item.duration_minutes >= 120));
+    (filters.duration === "all" || normalizeApproxDuration(item.duration_approx) === normalizeApproxDuration(filters.duration));
 }
 
 export function selectSet(catalog, filters, currentVideoId, rng = Math.random) {
@@ -20,14 +27,21 @@ export function selectSet(catalog, filters, currentVideoId, rng = Math.random) {
 
 export function catalogOptions(catalog) {
   const genres = new Map();
+  const durations = new Map();
   for (const item of catalog) {
     for (const genre of item.genres) {
       const key = genre.toLowerCase();
       if (!genres.has(key)) genres.set(key, genre);
     }
+    const duration = typeof item.duration_approx === "string" ? item.duration_approx.trim().replace(/\s+/g, " ") : "";
+    const durationKey = normalizeApproxDuration(duration);
+    if (durationKey && !durations.has(durationKey)) durations.set(durationKey, duration);
   }
+  const sortedDurations = [...durations.values()].sort((a, b) =>
+    approximateMinutes(a) - approximateMinutes(b) || a.localeCompare(b, "it", { sensitivity: "base" }));
   return {
     genres: [...genres.values()].sort((a, b) => a.localeCompare(b, "it")),
+    durations: sortedDurations,
     years: [...new Set(catalog.map(item => item.year))].sort((a, b) => b - a),
   };
 }

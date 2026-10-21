@@ -79,6 +79,16 @@ def parse_row(values: dict) -> DJSet:
             seen_genres.add(key)
     if not genres:
         raise ValueError("genres mancanti")
+    event_type = values.get("event_type")
+    if isinstance(event_type, str):
+        event_type = event_type.strip() or None
+    else:
+        event_type = None
+    duration_approx = values.get("duration_approx")
+    if isinstance(duration_approx, str):
+        duration_approx = " ".join(duration_approx.split()) or None
+    else:
+        duration_approx = None
     duration = values["duration_minutes"]
     if isinstance(duration, bool) or not isinstance(duration, (str, int, float)):
         raise ValueError("duration_minutes non valida")
@@ -97,7 +107,8 @@ def parse_row(values: dict) -> DJSet:
         year = int(year.strip())
     if not math.isfinite(year) or year != int(year) or not 1000 <= year <= 9999:
         raise ValueError("year non valido")
-    return DJSet(youtube_id=video_id, title=title.strip(), genres=genres,
+    return DJSet(youtube_id=video_id, title=title.strip(), event_type=event_type,
+                 duration_approx=duration_approx, genres=genres,
                  duration_minutes=duration, year=int(year))
 
 
@@ -117,11 +128,17 @@ def normalize_catalog(payload, column_map: dict[str, str]) -> list[DJSet]:
         indexes[field] = headers.index(header)
     event_name_indexes = [i for i, header in enumerate(headers) if header == normalize_header("EventName")]
     country_indexes = [i for i, header in enumerate(headers) if header == normalize_header("Country")]
+    event_type_indexes = [i for i, header in enumerate(headers) if header == normalize_header("EventType")]
+    duration_approx_indexes = [i for i, header in enumerate(headers) if header == normalize_header("DurationApprox")]
     event_name_index = event_name_indexes[0] if len(event_name_indexes) == 1 else None
     country_index = country_indexes[0] if len(country_indexes) == 1 else None
+    event_type_index = event_type_indexes[0] if len(event_type_indexes) == 1 else None
+    duration_approx_index = duration_approx_indexes[0] if len(duration_approx_indexes) == 1 else None
     items, seen = [], set()
     for row_number, row in enumerate(rows[1:], start=2):
         cells = {field: row[index] if index < len(row) else None for field, index in indexes.items()}
+        cells["event_type"] = row[event_type_index] if event_type_index is not None and event_type_index < len(row) else None
+        cells["duration_approx"] = row[duration_approx_index] if duration_approx_index is not None and duration_approx_index < len(row) else None
         artist = cells["title"]
         event_name = row[event_name_index] if event_name_index is not None and event_name_index < len(row) else None
         country = row[country_index] if country_index is not None and country_index < len(row) else None

@@ -57,12 +57,14 @@ def test_owner_sheet_mapping_and_comma_separated_genres():
     mapping = {"youtube_url":"LinkYoutube", "title":"Artist", "genres":"CustomGenres", "duration_minutes":"Duration", "year":"Year"}
     rows = [
         ["ID", "LinkYoutube", "Link1001", "Artist", "Year", "Date", "Country", "EventName", "EventType", "Genres1001", "Duration", "DurationApprox", "CustomGenres"],
-        [1, "https://www.youtube.com/watch?v=UVNsiVq_vX8", "", "Axwell", 2025, "18/07/2025", "Belgium", "Tomorrowland", "Festival", "Mainstage", 59, "1h", " EDM, Mainstage, Progressive   House, edm, Electro House, "],
+        [1, "https://www.youtube.com/watch?v=UVNsiVq_vX8", "", "Axwell", 2025, "18/07/2025", "Belgium", "Tomorrowland", "Festival", "Mainstage", 59, " 1h   ", " EDM, Mainstage, Progressive   House, edm, Electro House, "],
     ]
     result = normalize_catalog({"values":rows}, mapping)
     assert len(result) == 1
     assert result[0].title == "Axwell @ Tomorrowland 🇧🇪"
     assert result[0].year == 2025
+    assert result[0].event_type == "Festival"
+    assert result[0].duration_approx == "1h"
     assert result[0].duration_minutes == 59
     assert result[0].genres == ["EDM", "Mainstage", "Progressive House", "Electro House"]
     assert "Country" not in result[0].model_dump()
@@ -124,7 +126,9 @@ def test_http_routes_fresh_read_security_and_no_key_leak(settings):
         result = client.get("/api/catalog")
         assert result.headers["cache-control"] == "no-store"
         assert len(result.json()["items"]) == 1
-        assert set(result.json()["items"][0]) == {"youtube_id","title","genres","duration_minutes","year"}
+        assert set(result.json()["items"][0]) == {"youtube_id","title","event_type","duration_approx","genres","duration_minutes","year"}
+        assert result.json()["items"][0]["event_type"] is None
+        assert result.json()["items"][0]["duration_approx"] is None
         assert datetime.fromisoformat(result.json()["fetched_at"].replace("Z","+00:00")).tzinfo == timezone.utc
         assert client.get("/api/catalog").json()["items"] == []
         assert len(requests) == 2

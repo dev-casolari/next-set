@@ -21,7 +21,11 @@ test("uniform indexed pool, immediate exclusion only, zero and one result", () =
   assert.equal(selectSet([catalog[0]],DEFAULT_FILTERS,"a").item,catalog[0]);
 });
 test("options are deduplicated and sorted; exact duration is formatted", () => {
-  assert.deepEqual(catalogOptions(catalog),{genres:["house","techno"],durations:["30min","1h","1h 30min","2h"],years:[2024,2023]});
+  const options = catalogOptions(catalog);
+  assert.deepEqual(options,{genres:["house","techno"],durations:["30min","1h","1h 30min","2h"],years:[2024,2023]});
+  assert.deepEqual([...options.genreCounts],[["house",4],["techno",1]]);
+  assert.deepEqual([...options.durationCounts],[["30min",1],["1h",1],["1h 30min",1],["2h",1]]);
+  assert.deepEqual([...options.yearCounts],[[2024,3],[2023,1]]);
   assert.equal(formatDuration(92.5),"1 h 32 min 30 s");
 });
 test("duration options deduplicate case and whitespace variants and sort by approximate time", () => {
@@ -42,7 +46,7 @@ test("genre options keep the first source spelling across case variants", () => 
     item("c",120,["TECH HOUSE","deep house"],2024,"1h"),
   ];
   const original = structuredClone(mixedCase);
-  assert.deepEqual(catalogOptions(mixedCase).genres,["Deep House","EDM","Tech House"]);
+  assert.deepEqual(catalogOptions(mixedCase).genres,["Tech House","Deep House","EDM"]);
   assert.deepEqual(mixedCase,original);
 });
 test("genre filtering includes all source case variants and still applies other filters", () => {

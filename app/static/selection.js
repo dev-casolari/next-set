@@ -27,23 +27,42 @@ export function selectSet(catalog, filters, currentVideoId, rng = Math.random) {
 
 export function catalogOptions(catalog) {
   const genres = new Map();
+  const genreCounts = new Map();
   const durations = new Map();
+  const durationCounts = new Map();
+  const yearCounts = new Map();
   for (const item of catalog) {
+    const itemGenreKeys = new Set();
     for (const genre of item.genres) {
       const key = genre.toLowerCase();
+      if (itemGenreKeys.has(key)) continue;
+      itemGenreKeys.add(key);
       if (!genres.has(key)) genres.set(key, genre);
+      genreCounts.set(key, (genreCounts.get(key) || 0) + 1);
     }
     const duration = typeof item.duration_approx === "string" ? item.duration_approx.trim().replace(/\s+/g, " ") : "";
     const durationKey = normalizeApproxDuration(duration);
-    if (durationKey && !durations.has(durationKey)) durations.set(durationKey, duration);
+    if (durationKey) {
+      if (!durations.has(durationKey)) durations.set(durationKey, duration);
+      durationCounts.set(durationKey, (durationCounts.get(durationKey) || 0) + 1);
+    }
+    yearCounts.set(item.year, (yearCounts.get(item.year) || 0) + 1);
   }
+  const sortedGenres = [...genres.keys()].sort((a, b) =>
+    genreCounts.get(b) - genreCounts.get(a) || genres.get(a).localeCompare(genres.get(b), "it"));
   const sortedDurations = [...durations.values()].sort((a, b) =>
     approximateMinutes(a) - approximateMinutes(b) || a.localeCompare(b, "it", { sensitivity: "base" }));
-  return {
-    genres: [...genres.values()].sort((a, b) => a.localeCompare(b, "it")),
+  const options = {
+    genres: sortedGenres.map(key => genres.get(key)),
     durations: sortedDurations,
     years: [...new Set(catalog.map(item => item.year))].sort((a, b) => b - a),
   };
+  Object.defineProperties(options, {
+    genreCounts: { value: genreCounts },
+    durationCounts: { value: durationCounts },
+    yearCounts: { value: yearCounts },
+  });
+  return options;
 }
 
 export function formatDuration(minutes) {

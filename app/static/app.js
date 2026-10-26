@@ -92,16 +92,22 @@ function updateFilters() {
   state.filters = { genre: ui.genre.value || null, duration: ui.duration.value, year: ui.year.value ? Number(ui.year.value) : null };
   return select();
 }
+function optionLabel(label, count) { return `${label} (${count})`; }
 function reset() {
   ui.genre.value = ""; ui.duration.value = "all"; ui.year.value = "";
   return updateFilters();
 }
 function fillOptions() {
   const options = catalogOptions(state.catalog);
-  ui.genre.replaceChildren(new Option("All genres", ""), ...options.genres.map(g => new Option(g, g)));
+  ui.genre.replaceChildren(new Option("All genres", ""), ...options.genres.map(genre =>
+    new Option(optionLabel(genre, options.genreCounts.get(genre.toLowerCase())), genre)));
   ui.duration.replaceChildren(new Option("Any duration", "all"),
-    ...options.durations.map(duration => new Option(duration, normalizeApproxDuration(duration))));
-  ui.year.replaceChildren(new Option("All years", ""), ...options.years.map(y => new Option(String(y), String(y))));
+    ...options.durations.map(duration => {
+      const key = normalizeApproxDuration(duration);
+      return new Option(optionLabel(duration, options.durationCounts.get(key)), key);
+    }));
+  ui.year.replaceChildren(new Option("All years", ""), ...options.years.map(y =>
+    new Option(optionLabel(String(y), options.yearCounts.get(y)), String(y))));
 }
 
 function validCatalog(data) {

@@ -16,7 +16,7 @@ CSP = (
     "default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com https://cloud.umami.is; "
     "style-src 'self'; img-src 'self' https://i.ytimg.com data:; "
     "frame-src https://www.youtube.com https://www.youtube-nocookie.com; "
-    "connect-src 'self' https://www.youtube.com https://cloud.umami.is; object-src 'none'; "
+    "connect-src 'self' https://www.youtube.com https://cloud.umami.is https://gateway.umami.is; object-src 'none'; "
     "base-uri 'none'; frame-ancestors 'self'; form-action 'self'"
 )
 
